@@ -2,6 +2,7 @@ from photostereo import photometry
 import cv2 as cv
 import time
 import numpy as np
+from new_photo import new_photo
 
 
 IMAGES = 12
@@ -49,12 +50,12 @@ else:
     myps.setlightmat(light_mat)
     #print(myps.settsfromlm())
 
-tic = time.process_time()
-mask = cv.imread(root_fold + "mask" + format, cv.IMREAD_GRAYSCALE)
-normal_map = myps.runphotometry(image_array, np.asarray(mask, dtype=np.uint8))
-normal_map = cv.normalize(normal_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3)
-albedo = myps.getalbedo()
-albedo = cv.normalize(albedo, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
+# tic = time.process_time()
+# mask = cv.imread(root_fold + "mask" + format, cv.IMREAD_GRAYSCALE)
+# normal_map = myps.runphotometry(image_array, np.asarray(mask, dtype=np.uint8))
+# normal_map = cv.normalize(normal_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3)
+# albedo = myps.getalbedo()
+# albedo = cv.normalize(albedo, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
 #gauss = myps.computegaussian()
 #med = myps.computemedian()
 
@@ -63,16 +64,20 @@ albedo = cv.normalize(albedo, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
 #cv.imwrite('gauss.png',gauss)
 #cv.imwrite('med.png',med)
 
-toc = time.process_time()
-print("Process duration: " + str(toc - tic))
+# toc = time.process_time()
+# print("Process duration: " + str(toc - tic))
 
-# TEST: 3d reconstruction
-myps.computedepthmap()
-# myps.computedepth2()
-# myps.display3dobj()
-cv.imshow("normal.png", normal_map)
-#cv.imshow("mean", med)
-#cv.imshow("gauss", gauss)
-cv.waitKey(0)
-cv.destroyAllWindows()
-model = myps.display3dobj()
+# # TEST: 3d reconstruction
+# myps.computedepthmap()
+# # myps.computedepth2()
+# # myps.display3dobj()
+# cv.imshow("normal.png", normal_map)
+# #cv.imshow("mean", med)
+# #cv.imshow("gauss", gauss)
+# cv.waitKey(0)
+# cv.destroyAllWindows()
+# model = myps.display3dobj()
+
+camera = new_photo(IMAGES, light_mat)
+
+camera.process(image_array)
