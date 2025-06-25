@@ -5,9 +5,9 @@ import numpy as np
 
 
 IMAGES = 12
-root_fold = "./samples/buddha12/"
-obj_name = "buddha."
-format = ".bmp"
+root_fold = "../samples/buddha3/buddha3/"
+obj_name = "buddha"
+format = ".png"
 light_manual = False
 
 #Load input image array
@@ -70,8 +70,9 @@ print("Process duration: " + str(toc - tic))
 myps.computedepthmap()
 # myps.computedepth2()
 # myps.display3dobj()
-cv.imshow("normal", normal_map)
+cv.imshow("normal.png", normal_map)
 #cv.imshow("mean", med)
 #cv.imshow("gauss", gauss)
 cv.waitKey(0)
 cv.destroyAllWindows()
+model = myps.display3dobj()

@@ -62,10 +62,10 @@ class photometry:
         output_int = cv.bitwise_and(output_int, output_int, mask = mask)
         self.normalmap = cv.bitwise_and(self.normalmap, self.normalmap, mask = mask)
         if self.display:
-            cv.imshow('normal_normalized', output_int)
-            cv.imshow('albedo', self.albedo)
-            cv.imshow('self.pgrads', self.pgrads)
-            cv.imshow('self.qgrads', self.qgrads)
+            cv.imshow('normal_normalized.png', output_int)
+            cv.imshow('albedo.png', self.albedo)
+            cv.imshow('self.pgrads.png', self.pgrads)
+            cv.imshow('self.qgrads.png', self.qgrads)
             cv.waitKey(0)
             cv.destroyAllWindows()
         print("Normal map computation end ")
@@ -91,9 +91,7 @@ class photometry:
         print("Gaussian curvature computation end.")
         gaussgrad_norm = cv.normalize(self.gaussgrad, None, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
         if self.display:
-            cv.imshow('gaussgrad', gaussgrad_norm)
-            cv.waitKey(0)
-            cv.destroyAllWindows()
+            cv.imshow('gaussgrad.png', gaussgrad_norm)
         return gaussgrad_norm
 
     def computemedian(self):
@@ -120,9 +118,7 @@ class photometry:
         print("Median curvature computation end.")
         meangrad_norm = cv.normalize(self.meangrad, None, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
         if self.display:
-            cv.imshow('meangrad', meangrad_norm)
-            cv.waitKey(0)
-            cv.destroyAllWindows()
+            cv.imshow('meangrad.png', meangrad_norm)
         return meangrad_norm
 
     def setlightmat(self, light_mat):
@@ -190,9 +186,7 @@ class photometry:
         cv.dft(tempZ, self.Z, flags)
         z_norm = cv.normalize(self.Z, None, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
         if self.display:
-            cv.imshow('z_norm', z_norm)
-            cv.waitKey(0)
-            cv.destroyAllWindows()
+            cv.imshow('z_norm.png', z_norm)
         return z_norm
 
     def computedepth2(self):
@@ -217,8 +211,8 @@ class photometry:
         #self.Z = cv.normalize(Z, None, 0, 10, cv.NORM_MINMAX, cv.CV_32FC1)
         self.Z = np.clip(Z, -10, 10)
         Znorm = cv.normalize(Z, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
-        cv.imshow('Znorm', Znorm)
-        cv.imshow('Z', Z)
+        cv.imshow('Znorm.png', Znorm)
+        cv.imshow('Z.png', Z)
         cv.waitKey(0)
         cv.destroyAllWindows()
 
@@ -235,20 +229,56 @@ class photometry:
             for y in range (0, w):
                 points.InsertNextPoint(x, y, self.Z[x, y])
 
-        triangle = vtk.vtkTriangle()
+#        triangle = vtk.vtkTriangle()
+#        triangles = vtk.vtkCellArray()
+#        for i in range (0, h):
+#            for j in range (0, w):
+#                triangle.GetPointIds().SetId(0, j + (i * w))
+#                triangle.GetPointIds().SetId(1, (i + 1) * w + j)
+#                triangle.GetPointIds().SetId(2, j + (i * w) + 1)
+#                triangles.InsertNextCell(triangle)
+#                triangle.GetPointIds().SetId(0, (i + 1)*w + j)
+#                triangle.GetPointIds().SetId(1, (i + 1)*w + j + 1)
+#                triangle.GetPointIds().SetId(2, j + (i*w) + 1)
+#                triangles.InsertNextCell(triangle)
+
         triangles = vtk.vtkCellArray()
-        for i in range (0, h):
-            for j in range (0, w):
-                triangle.GetPointIds().SetId(0, j + (i * w))
-                triangle.GetPointIds().SetId(1, (i + 1) * w + j)
-                triangle.GetPointIds().SetId(2, j + (i * w) + 1)
-                triangles.InsertNextCell(triangle)
-                triangle.GetPointIds().SetId(0, (i + 1)*w + j)
-                triangle.GetPointIds().SetId(1, (i + 1)*w + j + 1)
-                triangle.GetPointIds().SetId(2, j + (i*w) + 1)
-                triangles.InsertNextCell(triangle)
+        for i in range(h - 1):
+            for j in range(w - 1):
+                id0 = j + i * w
+                id1 = j + (i + 1) * w
+                id2 = (j + 1) + i * w
+                id3 = (j + 1) + (i + 1) * w
 
+                # First triangle
+                tri1 = vtk.vtkTriangle()
+                tri1.GetPointIds().SetId(0, id0)
+                tri1.GetPointIds().SetId(1, id1)
+                tri1.GetPointIds().SetId(2, id2)
+                triangles.InsertNextCell(tri1)
 
+                # Second triangle
+                tri2 = vtk.vtkTriangle()
+                tri2.GetPointIds().SetId(0, id1)
+                tri2.GetPointIds().SetId(1, id3)
+                tri2.GetPointIds().SetId(2, id2)
+                triangles.InsertNextCell(tri2)
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         # Create a polydata object
         trianglePolyData = vtk.vtkPolyData()
 
@@ -280,8 +310,14 @@ class photometry:
         renderWindowInteractor.Start()
 
         filename = "test"
-        # Write the stl file to disk
-        stlWriter = vtk.vtkOBJExporter()
-        stlWriter.SetFilePrefix(filename)
-        stlWriter.SetInput(renderWindow)
-        stlWriter.Write()
+        # # Write the stl file to disk
+        # stlWriter = vtk.vtkOBJExporter()
+        # stlWriter.SetFilePrefix(filename)
+        # stlWriter.SetInput(renderWindow)
+        # stlWriter.Write()
+        obj_writer = vtk.vtkOBJWriter()
+        obj_writer.SetFileName("output_model.obj")
+        obj_writer.SetInputData(trianglePolyData)
+        obj_writer.Write()
+        print("3D object displayed and saved as output_model.obj")
+
