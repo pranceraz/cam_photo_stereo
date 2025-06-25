@@ -6,3 +6,4 @@
 *.mtl
 *.yml
 /photostereo_py/.vscode/
+.json5
