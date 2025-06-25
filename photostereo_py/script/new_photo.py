@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 import vtk
 import OpenEXR
-import Imath
+import Imath, json5
 
 
 class new_photo:

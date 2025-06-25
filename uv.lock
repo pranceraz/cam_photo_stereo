@@ -83,6 +83,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json5"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/12/be/c6c745ec4c4539b25a278b70e29793f10382947df0d9efba2fa09120895d/json5-0.12.0.tar.gz", hash = "sha256:0b4b6ff56801a1c7dc817b0241bca4ce474a0e6a163bfef3fc594d3fd263ff3a", size = 51907, upload-time = "2025-04-03T16:33:13.201Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/9f/3500910d5a98549e3098807493851eeef2b89cdd3032227558a104dfe926/json5-0.12.0-py3-none-any.whl", hash = "sha256:6d37aa6c08b0609f16e1ec5ff94697e2cbbfbad5ac112afa05794da9ab7810db", size = 36079, upload-time = "2025-04-03T16:33:11.927Z" },
+]
+
+[[package]]
 name = "kiwisolver"
 version = "1.4.8"
 source = { registry = "https://pypi.org/simple" }
@@ -261,6 +270,7 @@ name = "photometric-stereo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "json5" },
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "openexr" },
@@ -269,6 +279,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "json5", specifier = ">=0.12.0" },
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "openexr", specifier = ">=3.3.4" },

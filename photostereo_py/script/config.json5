@@ -1,0 +1,16 @@
+{
+  // Number of images to process
+  IMAGES: 12,
+
+  // Root folder containing the image samples
+  root_fold: "../samples/buddha3/buddha3/",
+
+  // Name of the object being processed
+  obj_name: "buddha",
+
+  // File format of the input images
+  format: ".png",
+
+  // Whether lighting information is provided manually
+  light_manual: false,
+}

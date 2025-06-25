@@ -3,13 +3,28 @@ import cv2 as cv
 import time
 import numpy as np
 from new_photo import new_photo
+import json5
 
 
-IMAGES = 12
-root_fold = "../samples/buddha3/buddha3/"
-obj_name = "buddha"
-format = ".png"
-light_manual = False
+
+# CONFIG
+try:
+    with open('config.json5', 'r') as f:
+        config = json5.load(f)
+
+    IMAGES = config['IMAGES']
+    root_fold = config['root_fold']
+    obj_name = config['obj_name']
+    format = config['format']
+    light_manual = config['light_manual']
+except:
+    print('couldnt load json, using defaults')
+    IMAGES = 12
+    root_fold = "../samples/buddha3/buddha3/"
+    obj_name = "buddha"
+    format = ".png"
+    light_manual = False
+
 
 #Load input image array
 image_array = []
