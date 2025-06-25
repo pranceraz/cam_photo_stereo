@@ -94,3 +94,10 @@ Albedo                      |  Normal map           | Curvatures
 ## License
 
 MIT License
+
+
+
+
+
+ $env:Path += ";C:\Users\Photogauge\AppData\Local\Programs\Python\Python312\Scripts\"
+>> pip --version
