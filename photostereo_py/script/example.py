@@ -28,13 +28,13 @@ except:
 
 #Load input image array
 image_array = []
-for id in range(0, IMAGES):
+for id in range(1, 101):  # adjust range to your actual count
+    filepath = f"../samples/queen/{id:03d}{format}"  # format = ".png", ".bmp", ".mat", etc.
     try:
-        filename = root_fold + str(obj_name) + str(id) + format
-        im = cv.imread(root_fold + str(obj_name) + str(id) + format, cv.IMREAD_GRAYSCALE)
-        image_array.append(im)
-    except cv.error as err:
-        print(err)
+        img = new_photo.load_image_flexible(filepath)
+        image_array.append(img)
+    except Exception as e:
+        print(f"Error loading image {id}: {e}")
 
 myps = photometry(IMAGES, True)
 
@@ -66,7 +66,9 @@ else:
     #print(myps.settsfromlm())
 
 # tic = time.process_time()
-mask = cv.imread(root_fold + "mask" + format, cv.IMREAD_GRAYSCALE)
+mask = cv.imread(root_fold + "mask" + '.png', cv.IMREAD_GRAYSCALE)
+
+
 # normal_map = myps.runphotometry(image_array, np.asarray(mask, dtype=np.uint8))
 # normal_map = cv.normalize(normal_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3)
 # albedo = myps.getalbedo()

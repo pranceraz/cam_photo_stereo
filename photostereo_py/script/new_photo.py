@@ -1,10 +1,11 @@
-import cv2 as cv
+import cv2
 import numpy as np
-import vtk
 import OpenEXR
-import Imath, json5
+import Imath
 import height_map
 import matplotlib.pyplot as plt
+import os
+from scipy.io import loadmat
 class new_photo:
     
     def  __init__(self, image_count : int ,light_matrix : list):
@@ -16,10 +17,43 @@ class new_photo:
         self.z = []
         self.pi = np.pi
         self.light_matrix = light_matrix
+        print(np.linalg.norm(self.light_matrix, axis=1))  # should be ≈1
         self.normals = []  #N = (SS^t)S^t I
         self.intensity = [] # I
         self.source_mat = [] # S
 
+    
+    def load_image_flexible(filepath):
+        ext = os.path.splitext(filepath)[1].lower()
+        
+        if ext in ['.png', '.bmp', '.jpg', '.jpeg']:
+            img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)  # or IMREAD_COLOR if needed
+            if img is None:
+                raise ValueError(f"Failed to load image: {filepath}")
+            return img
+
+        elif ext == '.mat':
+            mat = loadmat(filepath)
+            # Try to find the image data key automatically (skip __metadata__)
+            keys = [k for k in mat.keys() if not k.startswith('__')]
+            if not keys:
+                raise ValueError(f"No valid image key found in {filepath}")
+            img = mat[keys[0]]
+
+            if img is None or not isinstance(img, np.ndarray):
+                raise ValueError(f"Invalid image array in {filepath}")
+
+            # Convert to grayscale if image is color
+            if img.ndim == 3 and img.shape[2] == 3:
+                # Use standard RGB to grayscale conversion
+                img = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140])  # shape becomes (H, W)
+
+            return img
+
+
+        else:
+            raise ValueError(f"Unsupported file format: {filepath}")
+    
     def save_normals_to_exr(self,filename, normals):
         """
         Save a 3-channel float32 normal map to an OpenEXR file.
@@ -136,7 +170,7 @@ class new_photo:
         normal_map = normal_map.astype(np.uint8)
 
         heights = height_map.estimate_height_map(normal_map, raw_values=True,normalized_input= True)
-
+        #heights = heights
         # Display 2D normal map and height map
         figure, axes = plt.subplots(1, 2, figsize=(7, 3))
         axes[0].set_title("Normal Map")

@@ -1,15 +1,15 @@
 {
   // Number of images to process
-  IMAGES: 12,
+  IMAGES: 100,
 
   // Root folder containing the image samples
-  root_fold: "../samples/buddha3/buddha3/",
+  root_fold: "../samples/queen/",
 
   // Name of the object being processed
-  obj_name: "buddha",
+  obj_name: "",
 
   // File format of the input images
-  format: ".png",
+  format: ".mat",
 
   // Whether lighting information is provided manually
   light_manual: false,
