@@ -3,8 +3,8 @@ import numpy as np
 import vtk
 import OpenEXR
 import Imath, json5
-
-
+import height_map
+import matplotlib.pyplot as plt
 class new_photo:
     
     def  __init__(self, image_count : int ,light_matrix : list):
@@ -50,11 +50,15 @@ class new_photo:
         exr_file.writePixels({'R': R, 'G': G, 'B': B})
         exr_file.close()
         
-    def process(self,images_arr_raw : list ): 
+    def process(self,images_arr_raw : list ,mask): 
         ''' process creates the normal map for the given raw images '''
         # apply mask
         #todo
-          
+        if (mask is not None):
+            self.mask = mask
+            for id in range(0, self.image_count):
+                images_arr_raw[id] = np.multiply(images_arr_raw[id], mask/255)
+                
         image_arr = []
         for image in images_arr_raw: #image array is a list of uint8 cause cv does that at imread
             #we normalise the values and convert them to a float
@@ -113,5 +117,41 @@ class new_photo:
         normals_float = self.normals.astype(np.float32)
         self.save_normals_to_exr("normal_mapping.exr",normals_float)
 
-    
+    def model_out(self) -> None:
+        """
+        Visualize the height map derived from a normalized normal vector field.
 
+        Parameters:
+            normals (np.ndarray): A normalized HxWx3 normal map with values in [-1, 1].
+
+        Returns:
+            None
+        """
+        normals = self.normals
+        if normals.shape[-1] != 3:
+            raise ValueError("Input must have shape (H, W, 3) for normalized normals.")
+
+        # Convert back to uint8-style [0, 255] format for internal compatibility
+        normal_map = ((normals / 2.0) + 0.5) * 255
+        normal_map = normal_map.astype(np.uint8)
+
+        heights = height_map.estimate_height_map(normal_map, raw_values=True,normalized_input= True)
+
+        # Display 2D normal map and height map
+        figure, axes = plt.subplots(1, 2, figsize=(7, 3))
+        axes[0].set_title("Normal Map")
+        axes[1].set_title("Height Map")
+        axes[0].imshow(normal_map)
+        axes[1].imshow(heights, cmap="gray")
+
+        # Plot 3D height map
+        x, y = np.meshgrid(range(heights.shape[1]), range(heights.shape[0]))
+        fig_3d = plt.figure(figsize=(8, 6))
+        ax_3d = fig_3d.add_subplot(111, projection="3d")
+        ax_3d.plot_surface(x, y, heights, cmap="viridis", edgecolor="none")
+
+        plt.show()
+
+        
+        
+        

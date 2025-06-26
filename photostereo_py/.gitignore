@@ -6,5 +6,6 @@
 *.mtl
 *.yml
 *.json5
+*.exr
 /photostereo_py/.vscode/
 

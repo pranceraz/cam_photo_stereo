@@ -19,7 +19,7 @@ try:
     light_manual = config['light_manual']
 except:
     print('couldnt load json, using defaults')
-    IMAGES = 12
+    IMAGES = 12 #num images
     root_fold = "../samples/buddha3/buddha3/"
     obj_name = "buddha"
     format = ".png"
@@ -66,7 +66,7 @@ else:
     #print(myps.settsfromlm())
 
 # tic = time.process_time()
-# mask = cv.imread(root_fold + "mask" + format, cv.IMREAD_GRAYSCALE)
+mask = cv.imread(root_fold + "mask" + format, cv.IMREAD_GRAYSCALE)
 # normal_map = myps.runphotometry(image_array, np.asarray(mask, dtype=np.uint8))
 # normal_map = cv.normalize(normal_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3)
 # albedo = myps.getalbedo()
@@ -95,4 +95,5 @@ else:
 
 camera = new_photo(IMAGES, light_mat)
 
-camera.process(image_array)
+camera.process(image_array,mask = np.asarray(mask, dtype=np.uint8))
+camera.model_out()
