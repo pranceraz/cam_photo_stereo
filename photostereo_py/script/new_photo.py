@@ -91,7 +91,7 @@ class new_photo:
         if (mask is not None):
             self.mask = mask
             for id in range(0, self.image_count):
-                images_arr_raw[id] = np.multiply(images_arr_raw[id], mask/255)
+                images_arr_raw[id] = np.multiply(images_arr_raw[id], mask.astype(np.float32))
                 
         image_arr = []
         for image in images_arr_raw: #image array is a list of uint8 cause cv does that at imread
@@ -166,16 +166,18 @@ class new_photo:
             raise ValueError("Input must have shape (H, W, 3) for normalized normals.")
 
         # Convert back to uint8-style [0, 255] format for internal compatibility
-        normal_map = ((normals / 2.0) + 0.5) * 255
-        normal_map = normal_map.astype(np.uint8)
-
-        heights = height_map.estimate_height_map(normal_map, raw_values=True,normalized_input= False,mask=self.mask)
-        #heights = heights
+        
+        #normal_map = ((normals / 2.0) + 0.5) * 255
+        normalized_normals = (normals)
+        
+        heights = height_map.estimate_height_map(normal_map = normalized_normals, raw_values=True,normalized_input= True,mask=self.mask)
+        heights = - heights
         # Display 2D normal map and height map
         figure, axes = plt.subplots(1, 2, figsize=(7, 3))
         axes[0].set_title("Normal Map")
         axes[1].set_title("Height Map")
-        axes[0].imshow(normal_map)
+        normal_map_uint8 = ((normals + 1.0) / 2.0 * 255).astype(np.uint8)
+        axes[0].imshow(normal_map_uint8)#apparantly can only display when uint8
         axes[1].imshow(heights, cmap="gray")
 
         # Plot 3D height map
@@ -183,8 +185,17 @@ class new_photo:
         fig_3d = plt.figure(figsize=(8, 6))
         ax_3d = fig_3d.add_subplot(111, projection="3d")
         ax_3d.plot_surface(x, y, heights, cmap="viridis", edgecolor="none")
-
         plt.show()
+        fig = plt.figure(figsize=(6, 4))
+        plt.hist(self.normals[:, :, 2].flatten(), bins=100, color='skyblue', edgecolor='black')
+        plt.title("Distribution of Normal Z Components")
+        plt.xlabel("Z value")
+        plt.ylabel("Frequency")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        
 
         
         

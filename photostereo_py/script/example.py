@@ -97,5 +97,5 @@ mask = cv.imread(root_fold + "mask" + '.png', cv.IMREAD_GRAYSCALE)
 
 camera = new_photo(IMAGES, light_mat)
 
-camera.process(image_array,mask = np.asarray(mask, dtype=np.uint8))
+camera.process(image_array,mask = np.asarray(mask))
 camera.model_out()
