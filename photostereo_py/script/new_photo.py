@@ -6,6 +6,8 @@ import height_map
 import matplotlib.pyplot as plt
 import os
 from scipy.io import loadmat
+from numpy.fft import fft2, ifft2
+
 class new_photo:
     
     def  __init__(self, image_count : int ,light_matrix : list):
@@ -151,6 +153,30 @@ class new_photo:
         normals_float = self.normals.astype(np.float32)
         self.save_normals_to_exr("normal_mapping.exr",normals_float)
 
+    def frankot_chellappa(self,p, q):
+        """
+        Reconstruct surface from gradients p and q using Frankot-Chellappa algorithm.
+        """
+        h, w = p.shape
+        wx = np.fft.fftfreq(w) * 2 * np.pi
+        wy = np.fft.fftfreq(h) * 2 * np.pi
+        wx, wy = np.meshgrid(wx, wy)
+
+        denom = wx**2 + wy**2
+        denom[0, 0] = 1  # avoid division by zero at DC component
+
+        # Fourier transforms
+        p_fft = fft2(p)
+        q_fft = fft2(q)
+
+        # Surface reconstruction in Fourier domain
+        z_fft = (-1j * wx * p_fft - 1j * wy * q_fft) / denom
+        z_fft[0, 0] = 0  # remove DC offset
+
+        # Inverse FFT to get height map
+        z = np.real(ifft2(z_fft))
+        return z
+    
     def model_out(self) -> None:
         """
         Visualize the height map derived from a normalized normal vector field.
@@ -172,20 +198,34 @@ class new_photo:
         
         heights = height_map.estimate_height_map(normal_map = normalized_normals, raw_values=True,normalized_input= True,mask=self.mask)
         heights = - heights
-        # Display 2D normal map and height map
-        figure, axes = plt.subplots(1, 2, figsize=(7, 3))
-        axes[0].set_title("Normal Map")
-        axes[1].set_title("Height Map")
-        normal_map_uint8 = ((normals + 1.0) / 2.0 * 255).astype(np.uint8)
-        axes[0].imshow(normal_map_uint8)#apparantly can only display when uint8
-        axes[1].imshow(heights, cmap="gray")
+        height_mapz = self.frankot_chellappa(self.p, self.q)
+        
+        # 1. 2D Height Map (original)
+        plt.figure(figsize=(6, 6))
+        plt.imshow(heights, cmap='gray')
+        plt.title("2D Height Map")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
 
-        # Plot 3D height map
-        x, y = np.meshgrid(range(heights.shape[1]), range(heights.shape[0]))
+        # 2. Height Map via Frankot–Chellappa
+        plt.figure(figsize=(6, 6))
+        plt.imshow(height_mapz, cmap='gray')
+        plt.title("Height Map via Frankot–Chellappa")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
+
+        # 3. 3D Surface from height map
+        x, y = np.meshgrid(range(height_mapz.shape[1]), range(height_mapz.shape[0]))
         fig_3d = plt.figure(figsize=(8, 6))
         ax_3d = fig_3d.add_subplot(111, projection="3d")
-        ax_3d.plot_surface(x, y, heights, cmap="viridis", edgecolor="none")
+        ax_3d.plot_surface(x, y, height_mapz, cmap="viridis", edgecolor="none")
+        plt.title("3D Surface Reconstruction")
+        plt.tight_layout()
         plt.show()
+
+        # 4. Histogram of Z components of normal
         fig = plt.figure(figsize=(6, 4))
         plt.hist(self.normals[:, :, 2].flatten(), bins=100, color='skyblue', edgecolor='black')
         plt.title("Distribution of Normal Z Components")
@@ -194,6 +234,12 @@ class new_photo:
         plt.grid(True)
         plt.tight_layout()
         plt.show()
+
+            
+    
+
+    
+    
 
         
 
