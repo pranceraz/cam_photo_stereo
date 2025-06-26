@@ -169,7 +169,7 @@ class new_photo:
         normal_map = ((normals / 2.0) + 0.5) * 255
         normal_map = normal_map.astype(np.uint8)
 
-        heights = height_map.estimate_height_map(normal_map, raw_values=True,normalized_input= True)
+        heights = height_map.estimate_height_map(normal_map, raw_values=True,normalized_input= False,mask=self.mask)
         #heights = heights
         # Display 2D normal map and height map
         figure, axes = plt.subplots(1, 2, figsize=(7, 3))
