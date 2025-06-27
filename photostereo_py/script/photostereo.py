@@ -321,3 +321,28 @@ class photometry:
         obj_writer.Write()
         print("3D object displayed and saved as output_model.obj")
 
+# normal_map = myps.runphotometry(image_array, np.asarray(mask, dtype=np.uint8))
+# normal_map = cv.normalize(normal_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3)
+# albedo = myps.getalbedo()
+# albedo = cv.normalize(albedo, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
+#gauss = myps.computegaussian()
+#med = myps.computemedian()
+
+#cv.imwrite('normal_map.png',normal_map)
+#cv.imwrite('albedo.png',albedo)
+#cv.imwrite('gauss.png',gauss)
+#cv.imwrite('med.png',med)
+
+# toc = time.process_time()
+# print("Process duration: " + str(toc - tic))
+
+# # TEST: 3d reconstruction
+# myps.computedepthmap()
+# # myps.computedepth2()
+# # myps.display3dobj()
+# cv.imshow("normal.png", normal_map)
+# #cv.imshow("mean", med)
+# #cv.imshow("gauss", gauss)
+# cv.waitKey(0)
+# cv.destroyAllWindows()
+# model = myps.display3dobj()

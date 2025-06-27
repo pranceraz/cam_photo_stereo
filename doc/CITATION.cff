@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Your Software Title"
+authors:
+  - family-names: "Arnav"
+    given-names: "Yadavilli"
+date-released: 2025-06-27
+references:
+  - type: software
+    authors:
+      - family-names: "Merker"
+        given-names: "Endric"
+    title: "Depth from Normals"
+    date-released: 2022-02-20
+    url: "https://github.com/YertleTurtleGit/depth-from-normals"
+
+  # - type: software
+  #   authors:
+  #     - family-names: "Merker"
+  #       given-names: "Endric"
+  #   title: "Depth from Normals"
+  #   date-released: 2022-02-20
+  #   url: "https://github.com/YertleTurtleGit/depth-from-normals"

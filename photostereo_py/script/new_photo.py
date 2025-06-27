@@ -6,7 +6,7 @@ import height_map
 import matplotlib.pyplot as plt
 import os
 from scipy.io import loadmat
-from numpy.fft import fft2, ifft2
+from numpy.fft import fft2, ifft2, fftfreq
 
 class new_photo:
     
@@ -177,6 +177,62 @@ class new_photo:
         z = np.real(ifft2(z_fft))
         return z
     
+    def poisson_solver(self,p: np.ndarray, q: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+        """
+        Reconstruct depth map Z from gradient fields p and q using FFT-based Poisson solver.
+
+        Args:
+            p (np.ndarray): ∂z/∂x gradient (shape HxW)
+            q (np.ndarray): ∂z/∂y gradient (shape HxW)
+            mask (np.ndarray, optional): binary mask to define region of interest (shape HxW)
+
+        Returns:
+            Z (np.ndarray): reconstructed depth map (shape HxW)
+        """
+        h, w = p.shape
+
+        # Compute divergence of the gradient field (∂p/∂x + ∂q/∂y)
+        fx = np.zeros_like(p)
+        fy = np.zeros_like(q)
+        fx[:, :-1] = p[:, 1:] - p[:, :-1]
+        fy[:-1, :] = q[1:, :] - q[:-1, :]
+        f = fx + fy
+
+        # Discrete frequencies
+        y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+        denom = (2 * np.cos(np.pi * x / w) - 2) + (2 * np.cos(np.pi * y / h) - 2)
+        denom[0, 0] = 1  # Avoid divide by zero at (0, 0)
+
+        # FFT-based Poisson solver
+        f_hat = fft2(f)
+        Z_hat = f_hat / denom
+        Z_hat[0, 0] = 0  # Set DC component to 0 to fix scale ambiguity
+
+        Z = np.real(ifft2(Z_hat))
+
+        # Apply mask if provided
+        if mask is not None:
+            Z = Z * (mask > 0)
+
+        return Z
+    
+    def plot_depths_3d(self,depth_map:np.ndarray,title:str):
+        x, y = np.meshgrid(range(depth_map.shape[1]), range(depth_map.shape[0]))
+        fig_3d = plt.figure(figsize=(8, 6))
+        ax_3d = fig_3d.add_subplot(111, projection="3d")
+        ax_3d.plot_surface(x, y, depth_map, cmap="viridis", edgecolor="none")
+        plt.title(title)
+        plt.tight_layout()
+        plt.show()
+        
+    def plot_depths_2d(self,depth_map:np.ndarray,title:str):
+        plt.figure(figsize=(6, 6))
+        plt.imshow(depth_map, cmap='gray')
+        plt.title(title)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
+        
     def model_out(self) -> None:
         """
         Visualize the height map derived from a normalized normal vector field.
@@ -196,34 +252,21 @@ class new_photo:
         #normal_map = ((normals / 2.0) + 0.5) * 255
         normalized_normals = (normals)
         
-        heights = height_map.estimate_height_map(normal_map = normalized_normals, raw_values=True,normalized_input= True,mask=self.mask)
+        heights = height_map.estimate_height_map(normal_map = normalized_normals, raw_values=True,normalized_input= True ,mask=self.mask)
         heights = - heights
         height_mapz = self.frankot_chellappa(self.p, self.q)
+        height_mapz2 = self.poisson_solver(self.p,self.q)
         
-        # 1. 2D Height Map (original)
-        plt.figure(figsize=(6, 6))
-        plt.imshow(heights, cmap='gray')
-        plt.title("2D Height Map")
-        plt.axis('off')
-        plt.tight_layout()
-        plt.show()
-
-        # 2. Height Map via Frankot–Chellappa
-        plt.figure(figsize=(6, 6))
-        plt.imshow(height_mapz, cmap='gray')
-        plt.title("Height Map via Frankot–Chellappa")
-        plt.axis('off')
-        plt.tight_layout()
-        plt.show()
-
-        # 3. 3D Surface from height map
-        x, y = np.meshgrid(range(height_mapz.shape[1]), range(height_mapz.shape[0]))
-        fig_3d = plt.figure(figsize=(8, 6))
-        ax_3d = fig_3d.add_subplot(111, projection="3d")
-        ax_3d.plot_surface(x, y, height_mapz, cmap="viridis", edgecolor="none")
-        plt.title("3D Surface Reconstruction")
-        plt.tight_layout()
-        plt.show()
+        #2D plots
+        self.plot_depths_2d(heights,"basic 2D height-map")
+        self.plot_depths_2d(height_mapz,"2D height-map frankott")
+        self.plot_depths_2d(height_mapz2,"basic 2D height-map poisson")
+        
+        #3D plots
+        self.plot_depths_3d(heights,"basic 3D height-map")
+        self.plot_depths_3d(height_mapz,"3D height-map frankott")
+        self.plot_depths_3d(height_mapz2,"basic 3D height-map poisson")
+ 
 
         # 4. Histogram of Z components of normal
         fig = plt.figure(figsize=(6, 4))
