@@ -15,5 +15,4 @@ dependencies = [
     "pathlib2>=2.3.7.post1",
     "scikit-image>=0.19.2",
     "scipy>=1.8.0",
-    "vtk>=9.4.2",
 ]
