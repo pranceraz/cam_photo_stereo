@@ -232,7 +232,59 @@ class new_photo:
         plt.axis('off')
         plt.tight_layout()
         plt.show()
-        
+    
+    def plot_normal_map(self):
+        """
+        Visualize the normal map components and albedo for grayscale images.
+        """
+        if self.normals is None or len(self.normals) == 0:
+            print("No normals computed yet. Run process() first.")
+            return
+        self.normals[:, :, 2] *= -1  # if needed
+        if self.albedo is None:
+            print("No albedo map found.")
+            return
+
+        # Convert normals from [-1, 1] to [0, 1] for visualization
+        normals_vis = (self.normals + 1.0) / 2.0  # shape: (H, W, 3)
+
+        # Create a 2x2 grid to show the normal components
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+        # Combined normal map (RGB)
+        axes[0, 0].imshow(normals_vis)
+        axes[0, 0].set_title('Normal Map (RGB Encoding)')
+        axes[0, 0].axis('off')
+
+        # X component
+        im1 = axes[0, 1].imshow(self.normals[:, :, 0], cmap='gray', vmin=-1, vmax=1)
+        axes[0, 1].set_title('Normal X Component')
+        axes[0, 1].axis('off')
+        plt.colorbar(im1, ax=axes[0, 1], fraction=0.046)
+
+        # Y component
+        im2 = axes[1, 0].imshow(self.normals[:, :, 1], cmap='gray', vmin=-1, vmax=1)
+        axes[1, 0].set_title('Normal Y Component')
+        axes[1, 0].axis('off')
+        plt.colorbar(im2, ax=axes[1, 0], fraction=0.046)
+
+        # Z component
+        im3 = axes[1, 1].imshow(self.normals[:, :, 2], cmap='gray', vmin=-1, vmax=1)
+        axes[1, 1].set_title('Normal Z Component')
+        axes[1, 1].axis('off')
+        plt.colorbar(im3, ax=axes[1, 1], fraction=0.046)
+
+        plt.tight_layout()
+        plt.show()
+
+        # Show albedo (grayscale reflectance)
+        plt.figure(figsize=(6, 6))
+        plt.imshow(self.albedo, cmap='gray')
+        plt.title('Albedo (Grayscale Reflectance)')
+        plt.axis('off')
+        plt.show()
+
+    
     def model_out(self) -> None:
         """
         Visualize the height map derived from a normalized normal vector field.

@@ -73,4 +73,5 @@ mask = cv.imread(root_fold + "mask" + '.png', cv.IMREAD_GRAYSCALE)
 camera = new_photo(IMAGES, light_mat)
 
 camera.process(image_array)
+camera.plot_normal_map()
 #camera.model_out()
