@@ -28,8 +28,8 @@ except:
 
 #Load input image array
 image_array = []
-for id in range(1, 101):  # adjust range to your actual count
-    filepath = f"../samples/queen/{id:03d}{format}"  # format = ".png", ".bmp", ".mat", etc.
+for id in range(1, IMAGES+1):  # adjust range to your actual count
+    filepath = f"{config['root_fold']}{id:03d}{format}"  # format = ".png", ".bmp", ".mat", etc.
     try:
         img = new_photo.load_image_flexible(filepath)
         image_array.append(img)
@@ -72,5 +72,5 @@ mask = cv.imread(root_fold + "mask" + '.png', cv.IMREAD_GRAYSCALE)
 
 camera = new_photo(IMAGES, light_mat)
 
-camera.process(image_array,mask = np.asarray(mask))
-camera.model_out()
+camera.process(image_array)
+#camera.model_out()

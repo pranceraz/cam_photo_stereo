@@ -86,7 +86,7 @@ class new_photo:
         exr_file.writePixels({'R': R, 'G': G, 'B': B})
         exr_file.close()
         
-    def process(self,images_arr_raw : list ,mask): 
+    def process(self,images_arr_raw : list ,mask = None): 
         ''' process creates the normal map for the given raw images '''
         # apply mask
         #todo

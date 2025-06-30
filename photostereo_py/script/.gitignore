@@ -1,0 +1,12 @@
+# Ignore results and inputs
+*.png
+*.bmp
+*.tga
+*.obj
+*.mtl
+*.yml
+*.json5
+*.exr
+/photostereo_py/.vscode/
+!/samples/queen/*
+/s  cript/*.exr
