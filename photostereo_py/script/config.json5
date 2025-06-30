@@ -3,7 +3,7 @@
   IMAGES: 10,
 
   // Root folder containing the image samples
-  root_fold: "../samples/10rupee/",
+  root_fold: "../samples/new10/",
 
   // Name of the object being processed
   obj_name: "",
@@ -13,4 +13,8 @@
 
   // Whether lighting information is provided manually
   light_manual: false,
+
+  //sam model path
+  sam_model: "../../sam_vit_b.pth",
+
 }

@@ -4,7 +4,7 @@ import time
 import numpy as np
 from new_photo import new_photo
 import json5
-
+import masker
 
 
 # CONFIG
@@ -28,6 +28,7 @@ except:
 
 #Load input image array
 image_array = []
+masker.generate_mask(2)
 for id in range(1, IMAGES+1):  # adjust range to your actual count
     filepath = f"{config['root_fold']}{id:03d}{format}"  # format = ".png", ".bmp", ".mat", etc.
     try:
@@ -75,3 +76,4 @@ camera = new_photo(IMAGES, light_mat)
 camera.process(image_array, mask=mask)
 camera.plot_normal_map()
 #camera.model_out()
+

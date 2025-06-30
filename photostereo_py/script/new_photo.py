@@ -330,11 +330,7 @@ class new_photo:
         plt.tight_layout()
         plt.show()
 
-            
-    
-
-    
-    
+        
 
         
 

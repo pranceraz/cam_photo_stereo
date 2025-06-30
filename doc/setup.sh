@@ -1,6 +1,9 @@
 #!/bin/bash
 
-sudo apt install python3-pip python3-venv blender
-python3 -m venv ps-venv
-source ps-venv/bin/activate
-pip3 install -r requirements.txt
+pip install uv
+uv pip install -r requirements.txt
+
+#to run use uv run example.py
+# uv pip install git+https://github.com/facebookresearch/segment-anything.git
+## Using wget
+#wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -O sam_vit_b.pth
