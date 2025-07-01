@@ -209,11 +209,15 @@ class new_photo:
             print(scaled_normals.shape , "is the scaled normal shape")
             # Compute albedo (rho) = ||scaled_normal|| for each pixel
             # Take L2 norm along the last axis (3D vector at each pixel)
-            self.albedo = np.zeros((h, w, c), dtype=np.float32)#INITIALISING
+            # Get RGB albedo per channel based on projected intensity
+            self.albedo = np.zeros((h, w, c), dtype=np.float32)
             for channel in range(c):
-                scaled_normals_ch_T = pinv_source_mat @ intensity_colour_channels[channel]
-                scaled_normals_ch = scaled_normals_ch_T.T.reshape((h, w, 3))
-                self.albedo[:,:,channel] = np.linalg.norm(scaled_normals_ch, axis=2) # albedo: (h, w) - magnitude of scaled normals
+                # Element-wise multiply unit normal with light matrix and projected intensity
+                ch_intensity = intensity_colour_channels[channel]  # shape: (n_lights, h*w)
+                scaled_normal_ch = (pinv_source_mat @ ch_intensity).T.reshape((h, w, 3))
+                albedo_ch = np.linalg.norm(scaled_normal_ch, axis=2)
+                self.albedo[:, :, channel] = albedo_ch
+
 
             epsilon = 1e-8
             albedo_safe = np.maximum(self.albedo, epsilon)  # albedo_safe: (h, w) - albedo with minimum threshold
@@ -383,8 +387,8 @@ class new_photo:
         plt.axis('off')
         plt.show()
 
-    def plot_color_albedo(self):
-        """Visualize color albedo map"""
+    def plot_color_albedo(self, white_balance=True, gamma_correct=True):
+        """Visualize color albedo map with optional white balancing and gamma correction"""
         if self.albedo is None:
             print("No albedo computed yet.")
             return
@@ -401,11 +405,23 @@ class new_photo:
                 plt.title(f'{channels[i]} Channel Albedo')
                 plt.axis('off')
 
-            # Normalize combined albedo per-pixel
-            albedo_safe = np.nan_to_num(self.albedo, nan=0.0, posinf=0.0, neginf=0.0)
-            norm = np.linalg.norm(albedo_safe, axis=2, keepdims=True)
-            norm = np.maximum(norm, 1e-8)
-            albedo_display = np.clip(albedo_safe / norm, 0, 1)
+            # Combine color albedo without per-pixel normalization
+            albedo_display = np.copy(self.albedo)
+
+            # Optional: white balance based on average intensity per channel
+            if white_balance:
+                channel_means = np.mean(albedo_display, axis=(0, 1))
+                scale_factors = channel_means.mean() / (channel_means + 1e-8)
+                albedo_display *= scale_factors
+
+            # Normalize for display
+            albedo_display /= (np.max(albedo_display) + 1e-8)
+            albedo_display = np.clip(albedo_display, 0, 1)
+
+            # Optional: gamma correction (for display)
+            if gamma_correct:
+                gamma = .3
+                albedo_display = np.power(albedo_display, 1 / gamma)
 
             plt.subplot(1, 4, 4)
             plt.imshow(albedo_display)
@@ -423,6 +439,7 @@ class new_photo:
             plt.title('Grayscale Albedo')
             plt.axis('off')
             plt.show()
+
 
     def model_out(self) -> None:
         """
