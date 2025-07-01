@@ -24,7 +24,7 @@ class new_photo:
         self.intensity = [] # I
         self.source_mat = [] # S
 
-    
+    @staticmethod
     def load_image_flexible(filepath,color:bool = False):
         '''Loads images across file formats. Set color true when using with process_color'''
         ext = os.path.splitext(filepath)[1].lower()
@@ -32,8 +32,10 @@ class new_photo:
         if ext in ['.png', '.bmp', '.jpg', '.jpeg']:
             if color:
                 img =  cv2.imread(filepath, cv2.IMREAD_COLOR) 
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             else:
                 img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)  # or IMREAD_COLOR if needed
+                
             if img is None:
                 raise ValueError(f"Failed to load image: {filepath}")
             return img
