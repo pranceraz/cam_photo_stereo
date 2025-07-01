@@ -25,11 +25,15 @@ class new_photo:
         self.source_mat = [] # S
 
     
-    def load_image_flexible(filepath):
+    def load_image_flexible(filepath,color:bool = False):
+        '''Loads images across file formats. Set color true when using with process_color'''
         ext = os.path.splitext(filepath)[1].lower()
         
         if ext in ['.png', '.bmp', '.jpg', '.jpeg']:
-            img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)  # or IMREAD_COLOR if needed
+            if color:
+                img =  cv2.imread(filepath, cv2.IMREAD_COLOR) 
+            else:
+                img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)  # or IMREAD_COLOR if needed
             if img is None:
                 raise ValueError(f"Failed to load image: {filepath}")
             return img
@@ -56,14 +60,15 @@ class new_photo:
         else:
             raise ValueError(f"Unsupported file format: {filepath}")
     
-    def save_normals_to_exr(self,filename, normals):
+    def save_normals_to_exr(self,filename, normals, reduce:bool = False):
         """
         Save a 3-channel float32 normal map to an OpenEXR file.
         normals: H x W x 3 NumPy array with float32 values.
         """
-        if normals.dtype != np.float32:
+        if normals.dtype != np.float32 and reduce == False:
             normals = normals.astype(np.float32)
-        
+        elif normals.dtype != np.float32 and reduce == True:
+            normals = normals.astype(np.float16)
         height, width, channels = normals.shape
         assert channels == 3, "Expected a 3-channel normal map"
 
@@ -152,7 +157,99 @@ class new_photo:
         
         normals_float = self.normals.astype(np.float32)
         self.save_normals_to_exr("normal_mapping.exr",normals_float)
+ 
+    def process_color(self,images_arr_raw : list ,mask = None): 
+        ''' process creates the normal map for the given raw images '''
+        c = 3 #channels of color
+        if (mask is not None):
+            self.mask = mask
+            for id in range(0, self.image_count):
+                if images_arr_raw[id].ndim == c: #aka is a color image
+                    for chnl in range(c): #iterating through 3 colors           
+                        images_arr_raw[id][:,:,chnl] = np.multiply(images_arr_raw[id][:,:,chnl], mask.astype(np.float32)) #masking each channel 
+                else:
+                    print("not a color image, defaulting to greyscale")
+                    images_arr_raw[id] = np.multiply(images_arr_raw[id], mask.astype(np.float32))
+                    
+        image_arr = [] # create 3 matrices each should have 
+        is_color = images_arr_raw[0].ndim == c
+        intensity_colour_channels = [[] for _ in range(c)]# contains the intensities of every channel 3 of them 
+        if is_color:
+            h, w, c = images_arr_raw[0].shape # setting height and width of the normal space and the channels        
+            
+            for image in images_arr_raw: #image array is a list of uint8 cause cv does that at imread
+                #we normalise the values and convert them to a float
+                image = image.astype(np.float32) #conversion
+                image = image/255 # normalising
+                image_arr.append(image)
+                for channel in range(c):
+                    image_channel = image[:,:,channel].reshape(-1)#reshape to a flat vector [1,h*w] image for each channel
+                    intensity_colour_channels[channel].append(np.array(image_channel))
+                 # add to intensities as each is a vector of pixel intensities [12 ,h*w]
+            intensity_colour_channels = [np.array(ch_intensities) for ch_intensities in intensity_colour_channels]
+               
+            avg_intensity = np.mean(np.array(intensity_colour_channels), axis=0)  # shape: [12, h*w]
+            self.intensity = avg_intensity
+  
+            #h,w = image_arr[0].shape[:2] # setting height and width of the normal space 
+                                    # should be the size of the image
+                
+            self.normals = np.zeros((h,w,3), dtype= np.float32)# position of each normal in x and y of the picture and then the xyz components of the normal itself 
+            self.p = np.zeros((h,w), dtype = np.float32) #[h*w]
+            self.q = np.zeros((h,w), dtype = np.float32)#[h*w]
+            self.source_mat = np.array(self.light_matrix) #[12 x 3] assuming light matrix is 12 x 3
+            pinv_source_mat = np.linalg.pinv(self.source_mat) # does the pseudo inverse  (SS^t)^-1 S^t => [3x12]
+            
+            # now to get N
+            scaled_normals_T= pinv_source_mat@ self.intensity # 3x12 @ [12,h*w] => (3,h*w )matrix #flat
+            scaled_normals = scaled_normals_T.T # transpose to make it a Px3 matrix that we can make h,w,3 again #flat
+            scaled_normals = scaled_normals.reshape((h, w, 3)) #no longer flat
+            print(scaled_normals.shape , "is the scaled normal shape")
+            # Compute albedo (rho) = ||scaled_normal|| for each pixel
+            # Take L2 norm along the last axis (3D vector at each pixel)
+            self.albedo = np.zeros((h, w, c), dtype=np.float32)#INITIALISING
+            for channel in range(c):
+                scaled_normals_ch_T = pinv_source_mat @ intensity_colour_channels[channel]
+                scaled_normals_ch = scaled_normals_ch_T.T.reshape((h, w, 3))
+                self.albedo[:,:,channel] = np.linalg.norm(scaled_normals_ch, axis=2) # albedo: (h, w) - magnitude of scaled normals
 
+            epsilon = 1e-8
+            albedo_safe = np.maximum(self.albedo, epsilon)  # albedo_safe: (h, w) - albedo with minimum threshold
+
+            
+            # Compute unit normals
+            albedo_magnitude = np.linalg.norm(scaled_normals, axis=2)
+            epsilon = 1e-8
+            albedo_safe = np.maximum(albedo_magnitude, epsilon)
+            
+            self.normals = scaled_normals / albedo_safe[:, :, np.newaxis]
+            nz_safe = np.maximum(np.abs(self.normals[:, :, 2]), epsilon)
+            
+            self.p = -(self.normals[:,:,0]) / nz_safe
+            self.q = -(self.normals[:,:,1]) / nz_safe
+            
+            
+            # Handle points where Nz is close to zero (surface nearly perpendicular to viewing direction)
+            # implement if needed
+            print(f"Processing complete:")
+            print(f"- Image dimensions: {h} x {w}")
+            print(f"- Number of light sources: {self.source_mat.shape[0]}")  # source_mat.shape: (n_images, 3)
+            print(f"- Intensity matrix shape: {self.intensity.shape}")  # intensity.shape: (n_images, h*w)
+            print(f"- Scaled normals shape: {scaled_normals.shape}")  # scaled_normals.shape: (h, w, 3)
+            print(f"- Albedo shape: {self.albedo.shape}")  # albedo.shape: (h, w)
+            print(f"- Unit normals shape: {self.normals.shape}")  # normals.shape: (h, w, 3)
+            print(f"- Gradients p,q shape: {self.p.shape}, {self.q.shape}")  # p.shape, q.shape: (h, w)
+            print(f"- Albedo range: [{np.min(self.albedo):.3f}, {np.max(self.albedo):.3f}]")
+            print(f"- Normal range: X[{np.min(self.normals[:,:,0]):.3f}, {np.max(self.normals[:,:,0]):.3f}]")
+            print(f"- Normal range: Y[{np.min(self.normals[:,:,1]):.3f}, {np.max(self.normals[:,:,1]):.3f}]")
+            print(f"- Normal range: Z[{np.min(self.normals[:,:,2]):.3f}, {np.max(self.normals[:,:,2]):.3f}]")
+            
+            normals_float = self.normals.astype(np.float32)
+            self.save_normals_to_exr("normal_mapping.exr",normals_float)
+        
+        else:
+            self.process(images_arr_raw, mask)
+       
     def frankot_chellappa(self,p, q):
         """
         Reconstruct surface from gradients p and q using Frankot-Chellappa algorithm.
@@ -284,7 +381,47 @@ class new_photo:
         plt.axis('off')
         plt.show()
 
-    
+    def plot_color_albedo(self):
+        """Visualize color albedo map"""
+        if self.albedo is None:
+            print("No albedo computed yet.")
+            return
+
+        if self.albedo.ndim == 3:  # Color albedo
+            plt.figure(figsize=(15, 5))
+            channels = ['Red', 'Green', 'Blue']
+
+            for i in range(3):
+                channel = self.albedo[:, :, i]
+                norm_channel = np.clip(channel / (np.max(channel) + 1e-8), 0, 1)
+                plt.subplot(1, 4, i+1)
+                plt.imshow(norm_channel, cmap='gray')
+                plt.title(f'{channels[i]} Channel Albedo')
+                plt.axis('off')
+
+            # Normalize combined albedo per-pixel
+            albedo_safe = np.nan_to_num(self.albedo, nan=0.0, posinf=0.0, neginf=0.0)
+            norm = np.linalg.norm(albedo_safe, axis=2, keepdims=True)
+            norm = np.maximum(norm, 1e-8)
+            albedo_display = np.clip(albedo_safe / norm, 0, 1)
+
+            plt.subplot(1, 4, 4)
+            plt.imshow(albedo_display)
+            plt.title('Combined Color Albedo')
+            plt.axis('off')
+
+            plt.tight_layout()
+            plt.show()
+
+        else:
+            # Grayscale albedo
+            plt.figure(figsize=(6, 6))
+            albedo_vis = np.clip(self.albedo / (np.max(self.albedo) + 1e-8), 0, 1)
+            plt.imshow(albedo_vis, cmap='gray')
+            plt.title('Grayscale Albedo')
+            plt.axis('off')
+            plt.show()
+
     def model_out(self) -> None:
         """
         Visualize the height map derived from a normalized normal vector field.

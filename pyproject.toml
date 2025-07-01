@@ -15,7 +15,5 @@ dependencies = [
     "pathlib2>=2.3.7.post1",
     "scikit-image>=0.19.2",
     "scipy>=1.8.0",
-    "torch",
-    "torchaudio",
-    "torchvision",
+    # torch, torchvision, torchaudio installed manually with CUDA below
 ]
