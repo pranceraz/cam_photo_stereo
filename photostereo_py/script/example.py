@@ -28,11 +28,11 @@ except:
 
 #Load input image array
 image_array = []
-#masker.generate_mask(2)
+masker.generate_mask(2)
 for id in range(1, IMAGES+1):  # adjust range to your actual count
     filepath = f"{config['root_fold']}{id:03d}{format}"  # format = ".png", ".bmp", ".mat", etc.
     try:
-        img = new_photo.load_image_flexible(filepath,color=True)
+        img = new_photo.load_image_flexible(filepath,color=False)
         image_array.append(img)
     except Exception as e:
         print(f"Error loading image {id}: {e}")
@@ -73,8 +73,8 @@ mask = cv.imread(root_fold + "mask" + '.png', cv.IMREAD_GRAYSCALE)
 
 camera = new_photo(IMAGES, light_mat)
 
-camera.process_color(image_array, mask=mask)
-camera.plot_color_albedo()
+camera.process(image_array, mask=mask)
+#camera.plot_color_albedo()
 camera.plot_normal_map()
 #camera.model_out()
 

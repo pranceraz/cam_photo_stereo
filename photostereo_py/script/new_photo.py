@@ -67,6 +67,7 @@ class new_photo:
         Save a 3-channel float32 normal map to an OpenEXR file.
         normals: H x W x 3 NumPy array with float32 values.
         """
+        normals[:, :, 2] *= -1  # if needed reverses the Z axis only to turn depth into height
         if normals.dtype != np.float32 and reduce == False:
             normals = normals.astype(np.float32)
         elif normals.dtype != np.float32 and reduce == True:
@@ -343,7 +344,7 @@ class new_photo:
         if self.normals is None or len(self.normals) == 0:
             print("No normals computed yet. Run process() first.")
             return
-        self.normals[:, :, 2] *= -1  # if needed
+        self.normals[:, :, 2] *= -1  # if needed reverses the Z axis only to turn depth into height
         if self.albedo is None:
             print("No albedo map found.")
             return

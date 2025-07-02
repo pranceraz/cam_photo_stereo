@@ -3,7 +3,7 @@
   IMAGES: 10,
 
   // Root folder containing the image samples
-  root_fold: "../samples/10rupee/",
+  root_fold: "../samples/leaves_after/",
 
   // Name of the object being processed
   obj_name: "",
