@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import os
 from scipy.io import loadmat
 from numpy.fft import fft2, ifft2, fftfreq
+import pickle
 
 class new_photo:
     
@@ -93,7 +94,51 @@ class new_photo:
         exr_file = OpenEXR.OutputFile(filename, header)
         exr_file.writePixels({'R': R, 'G': G, 'B': B})
         exr_file.close()
-        
+    
+    def save_normals_to_png(self,filename, normals, normalize=True):
+        """
+        Save a 3-channel normal map to a PNG file.
+        normals: H x W x 3 NumPy array with float32 or float64 values in range [-1, 1] or unnormalized.
+        normalize: If True, normalize normals from [-1, 1] to [0, 255].
+        """
+        # Flip Z axis if needed
+        #normals = normals.copy()
+        normals[:, :, 2] *= -1
+
+        if normalize:
+            # Normalize from [-1, 1] to [0, 255]
+            normals = (normals + 1.0) * 0.5 * 255.0
+        else:
+            # Clip directly to [0, 255] range
+            normals = np.clip(normals, 0, 255)
+
+        normals = np.nan_to_num(normals)  # Replace NaNs and infs with 0
+        normals = normals.astype(np.uint8)
+
+        # Convert RGB format if needed (OpenCV expects BGR)
+        normals_bgr = cv2.cvtColor(normals, cv2.COLOR_RGB2BGR)
+
+        # Save the image
+        cv2.imwrite(filename, normals_bgr)
+
+    def save_normals_to_16bit_png(self,filename, normals):
+        normals = normals.copy()
+        #normals[:, :, 2] *= -1  # Flip Z
+
+        # Normalize [-1, 1] to [0, 65535]
+        normals = np.clip((normals + 1.0) * 0.5 * 65535.0, 0, 65535)
+        normals = np.nan_to_num(normals).astype(np.uint16)
+
+        normals_bgr = cv2.cvtColor(normals, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(filename, normals_bgr)
+    
+    @staticmethod
+    def export_normals_pickle(normals, filename):
+        """Export normals using pickle (preserves exact floating point precision)"""
+        with open(filename, 'wb') as f:
+            pickle.dump(normals, f)
+        print(f"Normals exported to {filename}")
+    
     def process(self,images_arr_raw : list ,mask = None): 
         ''' process creates the normal map for the given raw images '''
         # apply mask
@@ -160,6 +205,7 @@ class new_photo:
         
         normals_float = self.normals.astype(np.float32)
         self.save_normals_to_exr("normal_mapping.exr",normals_float)
+        self.save_normals_to_16bit_png("normal_mapping.png",normals=normals_float)  
  
     def process_color(self,images_arr_raw : list ,mask = None): 
         ''' process creates the normal map for the given raw images '''
@@ -253,7 +299,7 @@ class new_photo:
             
             normals_float = self.normals.astype(np.float32)
             self.save_normals_to_exr("normal_mapping.exr",normals_float)
-        
+            self.save_normals_to_16bit_png("16bitnormalmap.png",normals_float)
         else:
             self.process(images_arr_raw, mask)
        

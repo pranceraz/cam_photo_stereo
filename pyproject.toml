@@ -16,4 +16,5 @@ dependencies = [
     "scikit-image>=0.19.2",
     "scipy>=1.8.0",
     # torch, torchvision, torchaudio installed manually with CUDA below
+    "streamlit>=1.46.1",
 ]
