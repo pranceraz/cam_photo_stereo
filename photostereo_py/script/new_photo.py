@@ -133,7 +133,7 @@ class new_photo:
         cv2.imwrite(filename, normals_bgr)
     
     @staticmethod
-    def export_normals_pickle(normals, filename):
+    def export_normals_pickle(self,normals, filename):#.pkl
         """Export normals using pickle (preserves exact floating point precision)"""
         with open(filename, 'wb') as f:
             pickle.dump(normals, f)
@@ -206,7 +206,7 @@ class new_photo:
         normals_float = self.normals.astype(np.float32)
         self.save_normals_to_exr("normal_mapping.exr",normals_float)
         self.save_normals_to_16bit_png("normal_mapping.png",normals=normals_float)  
- 
+        self.export_normals_pickle(self,normals_float,'normals.pkl')
     def process_color(self,images_arr_raw : list ,mask = None): 
         ''' process creates the normal map for the given raw images '''
         c = 3 #channels of color
@@ -300,6 +300,7 @@ class new_photo:
             normals_float = self.normals.astype(np.float32)
             self.save_normals_to_exr("normal_mapping.exr",normals_float)
             self.save_normals_to_16bit_png("16bitnormalmap.png",normals_float)
+            self.export_normals_pickle(self,normals_float,'normals.pkl')
         else:
             self.process(images_arr_raw, mask)
        

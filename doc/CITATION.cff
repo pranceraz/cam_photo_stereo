@@ -14,10 +14,4 @@ references:
     date-released: 2022-02-20
     url: "https://github.com/YertleTurtleGit/depth-from-normals"
 
-  # - type: software
-  #   authors:
-  #     - family-names: "Merker"
-  #       given-names: "Endric"
-  #   title: "Depth from Normals"
-  #   date-released: 2022-02-20
-  #   url: "https://github.com/YertleTurtleGit/depth-from-normals"
+

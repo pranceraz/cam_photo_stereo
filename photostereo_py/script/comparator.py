@@ -16,31 +16,58 @@ except ImportError:
 
 class NormalMapComparator:
     
-    def __init__(self):
-        self.ref = cv.imread('ref.png', cv2.IMREAD_GRAYSCALE)
-        self.test = cv.imread('test.png', cv2.IMREAD_GRAYSCALE)
-        
-    def realign():
-        img0 = cv.imread("lasmeninas0.jpg", cv.COLOR_GR2RGBA)
-        img1 = cv.imread("lasmeninas1.jpg", cv.COLOR_BGR2RGBA)
-        features0 = FeatureExtraction(img0)
-        features1 = FeatureExtraction(img1)
+    def __init__(self, ref_path:str, test_path:str):
+        self.ref  = cv.imread(ref_path, cv.COLOR_BGR2RGBA) #img0
+        self.test = cv.imread(test_path, cv.COLOR_BGR2RGBA) #img1
+        if self.ref is None:
+            raise ValueError(f"Could not load reference image: {ref_path}")
+        if self.test is None:
+            raise ValueError(f"Could not load test image: {test_path}")
+    def realign(self):
+        features0 = FeatureExtraction(self.ref)
+        features1 = FeatureExtraction(self.test)
         matches = feature_matching(features0, features1)
         # matched_image = cv.drawMatches(img0, features0.kps, \
-        #     img1, features1.kps, matches, None, flags=2)
+        # img1, features1.kps, matches, None, flags=2)
 
         H, _ = cv.findHomography( features0.matched_pts, \
             features1.matched_pts, cv.RANSAC, 5.0)
 
-        h, w, c = img1.shape
-        warped = cv.warpPerspective(img0, H, (w, h), \
+        h, w, c = self.test.shape
+        warped = cv.warpPerspective(self.ref, H, (w, h), \
             borderMode=cv.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
 
         output = np.zeros((h, w, 3), np.uint8)
         alpha = warped[:, :, 3] / 255.0
-        output[:, :, 0] = (1. - alpha) * img1[:, :, 0] + alpha * warped[:, :, 0]
-        output[:, :, 1] = (1. - alpha) * img1[:, :, 1] + alpha * warped[:, :, 1]
-        output[:, :, 2] = (1. - alpha) * img1[:, :, 2] + alpha * warped[:, :, 2]
+        output[:, :, 0] = (1. - alpha) * self.test[:, :, 0] + alpha * warped[:, :, 0]
+        output[:, :, 1] = (1. - alpha) * self.test[:, :, 1] + alpha * warped[:, :, 1]
+        output[:, :, 2] = (1. - alpha) * self.test[:, :, 2] + alpha * warped[:, :, 2]
+        #return output
+                # Visualization
+        import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        
+        axes[0,0].imshow(cv.cvtColor(self.ref, cv.COLOR_BGR2RGB))
+        axes[0,0].set_title('Reference')
+        axes[0,0].axis('off')
+        
+        axes[0,1].imshow(cv.cvtColor(self.test, cv.COLOR_BGR2RGB))
+        axes[0,1].set_title('Test')
+        axes[0,1].axis('off')
+        
+        matched_img = cv.drawMatches(self.ref, features0.kps, self.test, features1.kps, matches[:30], None, flags=2)
+        axes[1,0].imshow(cv.cvtColor(matched_img, cv.COLOR_BGR2RGB))
+        axes[1,0].set_title(f'Matches ({len(matches)})')
+        axes[1,0].axis('off')
+        
+        axes[1,1].imshow(cv.cvtColor(output, cv.COLOR_BGR2RGB))
+        axes[1,1].set_title('Result')
+        axes[1,1].axis('off')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        return output
         
     def cross_correlate_score():
         
@@ -63,7 +90,9 @@ class NormalMapComparator:
     
     from skimage.util import view_as_windows
 
-    def sliding_ncc(ref, test, patch_size=31):
+    def sliding_ncc(self, patch_size=31):
+        ref, test = self.ref, self.test
+        self.realign()
         pad = patch_size // 2
         ref_p = np.pad(ref, pad)
         test_p = np.pad(test, pad)
@@ -86,4 +115,6 @@ class NormalMapComparator:
                 
         return ncc_map
 
-        
+
+
+
