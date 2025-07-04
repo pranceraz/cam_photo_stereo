@@ -8,6 +8,8 @@
 *.json5
 *.exr
 *.pkl
+*.stl
+*.ply
 /photostereo_py/.vscode/
 !/samples/queen/*
-/s  cript/*.exr
+/script/*.exr

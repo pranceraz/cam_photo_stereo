@@ -98,7 +98,7 @@ def generate_mask(num:int):
     # plt.show()
     cv2.imwrite(f"{root_fold}/mask.png", mask_resized)
 
-def generate_mask_generic(img_path:str):
+def generate_mask_generic(img_path:str, make_reversed = True):
     # Load image
     #img_path = f'{config['root_fold']}{num:03d}{format}'
     image_bgr = cv2.imread(img_path)
@@ -143,11 +143,12 @@ def generate_mask_generic(img_path:str):
 
     # Resize mask to original image size
     mask_resized = cv2.resize(mask, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
-    mask_resized = cv2.bitwise_not(mask_resized)
+    if make_reversed == True:
+        mask_resized = cv2.bitwise_not(mask_resized)
     # Resize image back to original size
     image_bgr_orig = cv2.resize(image_bgr_resized, (original_w, original_h), interpolation=cv2.INTER_AREA)
 
     # Apply mask to original image
     masked_img = cv2.bitwise_and(image_bgr_orig, image_bgr_orig, mask=mask_resized)
 
-    cv2.imwrite(f"generic_masks/masked.png", mask_resized)
+    return mask_resized

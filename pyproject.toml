@@ -9,6 +9,7 @@ dependencies = [
     "matplotlib>=3.5.1",
     "numba>=0.56.3",
     "numpy>=1.22.2",
+    "open3d>=0.19.0",
     "opencv-contrib-python>=4.5.5.62",
     "opencv-python>=4.11.0.86",
     "openexr>=3.3.4",
