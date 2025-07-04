@@ -10,12 +10,41 @@ orb = cv.ORB_create(
 
 class FeatureExtraction:
     def __init__(self, img):
+        self.img_orig = img
         self.img = copy.copy(img)
-        self.gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+       # if img.dtype != np.uint8:
+        self.img_8bit = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+       # else:
+      #      img_8bit = img.copy()
+                # Convert to grayscale properly
+        print(f"[FeatureExtraction] Received image with shape: {img.shape}")
+
+        if len(self.img_8bit.shape) == 2:
+            # Already grayscale
+            self.gray_img = copy.copy(img)
+        elif len(img.shape) == 3:
+            # Convert to grayscale
+            if self.img_8bit.shape[2] == 3:  # BGR
+                self.gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            elif self.img_8bit.shape[2] == 4:  # BGRA
+                self.gray_img = cv.cvtColor(img, cv.COLOR_BGRA2GRAY)
+            else:
+                raise ValueError(f"Unexpected number of channels: {img.shape[2]}")
+        else:
+            raise ValueError(f"Unexpected image dimensions: {img.shape}")
+        
+        #redu
+        #redundant
+        if self.gray_img.dtype != np.uint8:
+             print(f"[INFO] Converting 16-bit image from {self.gray_img.dtype} to uint8")
+             self.gray_img = cv.normalize(self.gray_img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+
+        print(f"Original image shape: {self.img.shape}")
+        print(f"Grayscale image shape: {self.gray_img.shape}")
         self.kps, self.des = orb.detectAndCompute( \
             self.gray_img, None)
         self.img_kps = cv.drawKeypoints( \
-            self.img, self.kps, 0, \
+            self.img_8bit, self.kps, 0, \
             flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         self.matched_pts = []
 

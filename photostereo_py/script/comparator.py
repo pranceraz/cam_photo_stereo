@@ -17,57 +17,67 @@ except ImportError:
 class NormalMapComparator:
     
     def __init__(self, ref_path:str, test_path:str):
-        self.ref  = cv.imread(ref_path, cv.COLOR_BGR2RGBA) #img0
-        self.test = cv.imread(test_path, cv.COLOR_BGR2RGBA) #img1
+        # Load images with all channels preserved
+        self.ref = cv.imread(ref_path, cv.IMREAD_UNCHANGED)
+        self.test = cv.imread(test_path, cv.IMREAD_UNCHANGED)
+        self.ref_orig = self.ref.copy()
+        self.test_orig = self.test.copy()
+        self.ref_8bit = self.to_8bit(self.ref)
+        self.test_8bit = self.to_8bit(self.test)
+
         if self.ref is None:
             raise ValueError(f"Could not load reference image: {ref_path}")
         if self.test is None:
             raise ValueError(f"Could not load test image: {test_path}")
+        print(f"Reference image shape: {self.ref.shape}")
+        print(f"Test image shape: {self.test.shape}")
+
     def realign(self):
-        features0 = FeatureExtraction(self.ref)
-        features1 = FeatureExtraction(self.test)
+        features0 = FeatureExtraction(self.ref_orig)
+        features1 = FeatureExtraction(self.test_orig)
         matches = feature_matching(features0, features1)
         # matched_image = cv.drawMatches(img0, features0.kps, \
         # img1, features1.kps, matches, None, flags=2)
 
-        H, _ = cv.findHomography( features0.matched_pts, \
-            features1.matched_pts, cv.RANSAC, 5.0)
+        H, _ = cv.findHomography( features1.matched_pts, \
+            features0.matched_pts, cv.RANSAC, 5.0)
 
-        h, w, c = self.test.shape
-        warped = cv.warpPerspective(self.ref, H, (w, h), \
+        h, w, c = self.ref.shape
+        warped = cv.warpPerspective(self.test, H, (w, h), \
             borderMode=cv.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
-
-        output = np.zeros((h, w, 3), np.uint8)
-        alpha = warped[:, :, 3] / 255.0
-        output[:, :, 0] = (1. - alpha) * self.test[:, :, 0] + alpha * warped[:, :, 0]
-        output[:, :, 1] = (1. - alpha) * self.test[:, :, 1] + alpha * warped[:, :, 1]
-        output[:, :, 2] = (1. - alpha) * self.test[:, :, 2] + alpha * warped[:, :, 2]
+        output = warped
+        # output = np.zeros((h, w, 3), np.uint8)
+        #alpha = warped[:, :, 3] / 255.0
+        # output[:, :, 0] = (1. - alpha) * self.test[:, :, 0] + alpha * warped[:, :, 0]
+        # output[:, :, 1] = (1. - alpha) * self.test[:, :, 1] + alpha * warped[:, :, 1]
+        # output[:, :, 2] = (1. - alpha) * self.test[:, :, 2] + alpha * warped[:, :, 2]
         #return output
                 # Visualization
         import matplotlib.pyplot as plt
         fig, axes = plt.subplots(2, 2, figsize=(12, 8))
         
-        axes[0,0].imshow(cv.cvtColor(self.ref, cv.COLOR_BGR2RGB))
-        axes[0,0].set_title('Reference')
-        axes[0,0].axis('off')
-        
-        axes[0,1].imshow(cv.cvtColor(self.test, cv.COLOR_BGR2RGB))
-        axes[0,1].set_title('Test')
+        axes[0,1].imshow(cv.cvtColor(self.ref_8bit, cv.COLOR_BGR2RGB))
+        axes[0,1].set_title('Reference')
         axes[0,1].axis('off')
         
-        matched_img = cv.drawMatches(self.ref, features0.kps, self.test, features1.kps, matches[:30], None, flags=2)
+        axes[0,0].imshow(cv.cvtColor(self.test_8bit, cv.COLOR_BGR2RGB))
+        axes[0,0].set_title('Test')
+        axes[0,0].axis('off')
+        
+        matched_img = cv.drawMatches(self.ref_8bit, features0.kps, self.test_8bit, features1.kps, matches[:30], None, flags=2)
         axes[1,0].imshow(cv.cvtColor(matched_img, cv.COLOR_BGR2RGB))
         axes[1,0].set_title(f'Matches ({len(matches)})')
         axes[1,0].axis('off')
         
-        axes[1,1].imshow(cv.cvtColor(output, cv.COLOR_BGR2RGB))
+        axes[1,1].imshow(cv.cvtColor(self.to_8bit(output), cv.COLOR_BGR2RGB))
         axes[1,1].set_title('Result')
         axes[1,1].axis('off')
         
         plt.tight_layout()
         plt.show()
-        
-        return output
+        print(f"[DEBUG] Output dtype: {output.dtype}, max: {output.max()}, min: {output.min()}")
+        return  cv.imwrite("aligned_test_to_ref.png", output)
+
         
     def cross_correlate_score():
         
@@ -115,6 +125,7 @@ class NormalMapComparator:
                 
         return ncc_map
 
-
+    def to_8bit(self,img16):
+        return cv.normalize(img16, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
 
 
