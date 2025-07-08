@@ -8,7 +8,7 @@ from masker import generate_mask_generic
 # --- Load normal map and generate mask ---
 image_path = "stamp_particle.png"
 print("Loading normal map...")
-normal_map = cv2.imread(image_path).astype(np.float32) / 255.0
+normal_map = cv2.imread(image_path).astype(np.float32) / 255.0  #Converts the RGB values from integers (0–255) to floating point values between 0.0–1.0.
 
 print("Generating mask for normal map using SAM...")
 mask = generate_mask_generic(image_path,make_reversed=False)
@@ -33,8 +33,8 @@ mask_flat = mask.flatten()
 # --- Apply mask to create 3D points ---
 print("Creating 3D points from unmasked regions...")
 points = np.zeros((np.count_nonzero(mask_flat), 3), dtype=np.float32)
-points[:, 0] = xx_flat[mask_flat] + normals_flat[mask_flat, 0] * 10
-points[:, 1] = yy_flat[mask_flat] + normals_flat[mask_flat, 1] * 10
+points[:, 0] = xx_flat[mask_flat] + normals_flat[mask_flat, 0] * 10#pandas like filtering
+points[:, 1] = yy_flat[mask_flat] + normals_flat[mask_flat, 1] * 10 #like normals_flat[mask_flat][:, 0]	
 points[:, 2] = normals_flat[mask_flat, 2] * 10
 
 print(f"Points created: {len(points)}")

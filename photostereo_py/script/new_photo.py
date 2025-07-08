@@ -434,6 +434,18 @@ class new_photo:
         plt.title('Albedo (Grayscale Reflectance)')
         plt.axis('off')
         plt.show()
+        
+                        
+        # 4. Histogram of Z components of normal
+        fig = plt.figure(figsize=(6, 4))
+        plt.hist(self.normals[:, :, 2].flatten(), bins=100, color='skyblue', edgecolor='black')
+        plt.title("Distribution of Normal Z Components")
+        plt.xlabel("Z value")
+        plt.ylabel("Frequency")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+        
 
     def plot_color_albedo(self, white_balance=True, gamma_correct=True):
         """Visualize color albedo map with optional white balancing and gamma correction"""
@@ -506,33 +518,26 @@ class new_photo:
         # Convert back to uint8-style [0, 255] format for internal compatibility
         
         #normal_map = ((normals / 2.0) + 0.5) * 255
-        normalized_normals = (normals)
+        normalized_normals = (normals)  
+
         
         heights = height_map.estimate_height_map(normal_map = normalized_normals, raw_values=True,normalized_input= True ,mask=self.mask)
         heights = - heights
-        height_mapz = self.frankot_chellappa(self.p, self.q)
-        height_mapz2 = self.poisson_solver(self.p,self.q)
+        # height_mapz = self.frankot_chellappa(self.p, self.q)
+        # height_mapz2 = self.poisson_solver(self.p,self.q)
         
         #2D plots
         self.plot_depths_2d(heights,"basic 2D height-map")
-        self.plot_depths_2d(height_mapz,"2D height-map frankott")
-        self.plot_depths_2d(height_mapz2,"basic 2D height-map poisson")
+        # self.plot_depths_2d(height_mapz,"2D height-map frankott")
+        # self.plot_depths_2d(height_mapz2,"basic 2D height-map poisson")
         
+
         #3D plots
         self.plot_depths_3d(heights,"basic 3D height-map")
-        self.plot_depths_3d(height_mapz,"3D height-map frankott")
-        self.plot_depths_3d(height_mapz2,"basic 3D height-map poisson")
+        # self.plot_depths_3d(height_mapz,"3D height-map frankott")
+        # self.plot_depths_3d(height_mapz2,"basic 3D height-map poisson")
  
 
-        # 4. Histogram of Z components of normal
-        fig = plt.figure(figsize=(6, 4))
-        plt.hist(self.normals[:, :, 2].flatten(), bins=100, color='skyblue', edgecolor='black')
-        plt.title("Distribution of Normal Z Components")
-        plt.xlabel("Z value")
-        plt.ylabel("Frequency")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
 
         
 

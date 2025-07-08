@@ -96,6 +96,19 @@ def centered_crop(image: np.ndarray, target_resolution: Tuple[int, int]) -> np.n
         + target_resolution[1],
     ]
 
+def remove_normal_outliers(normals: np.ndarray, threshold: float = 0.3) -> np.ndarray:
+    """
+    Remove outliers in normals based on vector length deviation from unit norm.
+    You can customize this with more advanced filters later.
+    """
+    magnitude = np.linalg.norm(normals, axis=-1)
+    valid_mask = np.abs(magnitude - 1.0) < threshold  # Keep only ~unit vectors
+
+    # Replace invalid normals with [0, 0, 1] (pointing straight out)
+    cleaned = normals.copy()
+    cleaned[~valid_mask] = np.array([0.0, 0.0, 1.0])
+
+    return cleaned
 
 def integrate_vector_field(
     vector_field: np.ndarray,
@@ -170,6 +183,8 @@ def estimate_height_map(
     else:
         # Assume already normalized in [-1,1]
         normals = normal_map.astype(np.float64)
+
+    normals = remove_normal_outliers(normals)
 
     heights = integrate_vector_field(normals, target_iteration_count, thread_count)
     

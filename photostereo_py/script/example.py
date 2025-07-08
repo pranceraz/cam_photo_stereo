@@ -51,5 +51,5 @@ camera = new_photo(IMAGES, light_mat)
 camera.process(image_array, mask=mask)
 #camera.plot_color_albedo()
 camera.plot_normal_map()
-#camera.model_out()
+camera.model_out()
 
