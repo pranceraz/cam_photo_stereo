@@ -63,6 +63,21 @@ class new_photo:
         else:
             raise ValueError(f"Unsupported file format: {filepath}")
     
+    
+    @staticmethod
+    def crop_square(img):
+        """
+        Crops a centered square region from an image
+        """
+        H, W = img.shape[:2] #200,100
+        y1 = H // 2
+        x1 = W // 2
+
+        square_size = min(H, W)
+        ch, cw = square_size//2, square_size//2
+
+        return img[y1-ch:y1+ch, x1-cw:x1+cw]
+    
     def save_normals_to_exr(self,filename, normals, reduce:bool = False):
         """
         Save a 3-channel float32 normal map to an OpenEXR file.
@@ -121,8 +136,10 @@ class new_photo:
         # Save the image
         cv2.imwrite(filename, normals_bgr)
 
-    def save_normals_to_16bit_png(self,filename, normals):
+    def save_normals_to_16bit_png(self,filename, normals, square_crop = False):
         normals = normals.copy()
+        if square_crop:
+            normals = self.crop_square(normals)
         #normals[:, :, 2] *= -1  # Flip Z
 
         # Normalize [-1, 1] to [0, 65535]
