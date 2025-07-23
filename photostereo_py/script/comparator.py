@@ -81,10 +81,6 @@ class NormalMapComparator:
         else:
             return output
 
-        
-    def cross_correlate_score():
-        
-        pass
     
     def image_root_mse(self,normalref, normaltest ):
         from skimage.metrics import structural_similarity as ssim
@@ -134,8 +130,8 @@ class NormalMapComparator:
                 
         return ncc_map
 
-    def to_8bit(self,img16):
-        return cv.normalize(img16, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+    def to_8bit(self,img):
+        return cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
 
     @staticmethod
     def rgb_to_normal_map(img):
