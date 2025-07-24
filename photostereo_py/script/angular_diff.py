@@ -150,7 +150,7 @@ def run_gpu_similarity_analysis(
 
 def sam_from_similarity(
     sim_png_path: str,
-    sam_ckpt: str = r"D:\Chandana\Photometric_Stereo\cam_photo_stereo\sam_vit_b.pth",
+    sam_ckpt: str = r"C:/Users/Photogauge/projet/cam_photo_stereo/sam_vit_b.pth",
     peak_frac: float = 0.001,
     dilate_px: int = 4
 ) -> np.ndarray:
