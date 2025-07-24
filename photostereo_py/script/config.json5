@@ -3,7 +3,7 @@
   IMAGES: 10,
 
   // Root folder containing the image samples
-  root_fold: "../samples/stamp_particle/",
+  root_fold: "../samples/50 paise_before/",
 
   // Name of the object being processed
   obj_name: "",

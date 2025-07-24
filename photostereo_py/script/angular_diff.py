@@ -1,387 +1,297 @@
+# ---------------------------------------------------------------
+# angular_diff_fixed.py
+# ---------------------------------------------------------------
+import os
 import cv2
+import json
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Tuple, List, Optional
-import os
-import torch
 import torch.nn.functional as F
+from pathlib import Path
+from typing import Tuple
+from segment_anything import SamPredictor, sam_model_registry
+# ---------------------------------------------------------------
+# 1.  I/O helpers
+# ---------------------------------------------------------------
 
-class VectorBasedNormalMapProcessor:
-    def __init__(self, template_size: Tuple[int, int] = (32, 32), 
-                 downscale_factor: float = 0.2, overlap_ratio: float = 0.5):
-        """
-        Vector-based normal map comparison processor
-        
-        Args:
-            template_size: Size of templates to extract (increased from 16x16)
-            downscale_factor: Factor to downscale images
-            overlap_ratio: Overlap between templates (reduced for better coverage)
-        """
-        self.template_size = template_size
-        self.downscale_factor = downscale_factor
-        self.overlap_ratio = overlap_ratio
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def load_16bit_normal(path: str) -> np.ndarray:
+    """
+    Load a 16-bit RGB normal-map PNG/TIFF and return unit vectors in [-1,1].
+    """
+    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if img is None or img.dtype != np.uint16 or img.shape[2] != 3:
+        raise ValueError(f"Invalid 16-bit RGB image: {path}")
 
-    def rgb_to_normal_vector(self, rgb_image: np.ndarray) -> np.ndarray:
-        """
-        Convert RGB normal map to normal vectors
-        
-        Args:
-            rgb_image: Input RGB image (0-255 range)
-            
-        Returns:
-            Normal vectors in range [-1, 1] with shape (H, W, 3)
-        """
-        # Convert to float and normalize to [0, 1]
-        normalized = rgb_image.astype(np.float32) / 255.0
-        
-        # Convert to normal vector range [-1, 1]
-        normal_vectors = normalized * 2.0 - 1.0
-        
-        # Ensure Z component is positive (normal maps typically have positive Z)
-        normal_vectors[:, :, 2] = np.abs(normal_vectors[:, :, 2])
-        
-        # Normalize vectors to unit length
-        norms = np.linalg.norm(normal_vectors, axis=2, keepdims=True)
-        norms = np.where(norms == 0, 1, norms)  # Avoid division by zero
-        normal_vectors = normal_vectors / norms
-        
-        return normal_vectors
+    normals = img.astype(np.float32) / 65535.0        # [0,1]
+    normals = normals * 2.0 - 1.0                     # [-1,1]
+    normals[..., 2] = np.abs(normals[..., 2])         # Z⁺ hemisphere
+    norm = np.linalg.norm(normals, axis=2, keepdims=True)
+    normals /= np.maximum(norm, 1e-6)
+    return normals
 
-    def compute_angular_difference(self, normal1: np.ndarray, normal2: np.ndarray) -> np.ndarray:
-        """
-        Compute angular difference between normal vectors
-        
-        Args:
-            normal1: First normal vector array (H, W, 3)
-            normal2: Second normal vector array (H, W, 3)
-            
-        Returns:
-            Angular differences in radians (H, W)
-        """
-        # Compute dot product
-        dot_product = np.sum(normal1 * normal2, axis=2)
-        
-        # Clamp to [-1, 1] to avoid numerical errors in arccos
-        dot_product = np.clip(dot_product, -1.0, 1.0)
-        
-        # Compute angular difference
-        angular_diff = np.arccos(np.abs(dot_product))
-        
-        return angular_diff
 
-    def compute_similarity_score(self, template_vectors: np.ndarray, 
-                               region_vectors: np.ndarray) -> float:
-        """
-        Compute similarity score between template and region normal vectors
-        
-        Args:
-            template_vectors: Template normal vectors (H, W, 3)
-            region_vectors: Region normal vectors (H, W, 3)
-            
-        Returns:
-            Similarity score (0-1, higher is more similar)
-        """
-        angular_diff = self.compute_angular_difference(template_vectors, region_vectors)
-        
-        # Convert angular difference to similarity score
-        # Angular difference of 0 = similarity of 1
-        # Angular difference of π/2 = similarity of 0
-        similarity = 1.0 - (angular_diff / (np.pi / 2))
-        similarity = np.clip(similarity, 0.0, 1.0)
-        
-        # Return mean similarity across the template
-        return np.mean(similarity)
+# ---------------------------------------------------------------
+# 2.  Cosine-similarity (GPU, patch-wise)
+# ---------------------------------------------------------------
 
-    def load_mask(self, mask_path: str) -> np.ndarray:
-        """Load and process mask file"""
-        if not os.path.exists(mask_path):
-            raise FileNotFoundError(f"Mask file not found: {mask_path}")
+def sliding_cosine_similarity_gpu(
+    ref: torch.Tensor, test: torch.Tensor, patch_size: int = 31
+) -> torch.Tensor:
+    """
+    Patch-wise cosine similarity (mean over each patch).
+    ref, test : shape (1,3,H,W) on the same CUDA device.
+    Returns   : (H,W) tensor on the same device.
+    """
+    device = ref.device
+    _, _, H, W = ref.shape
+    pad = patch_size // 2
 
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        if mask is None:
-            raise ValueError(f"Could not load mask from: {mask_path}")
+    ref_pad  = F.pad(ref,  (pad, pad, pad, pad), mode='reflect')
+    test_pad = F.pad(test, (pad, pad, pad, pad), mode='reflect')
 
-        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-        print(f"Loaded mask: {mask.shape[1]}x{mask.shape[0]}")
-        return mask
+    simil = torch.empty((H, W), dtype=torch.float32, device=device)
 
-    def find_crop_boundaries(self, mask: np.ndarray, padding: int = 10) -> Tuple[int, int, int, int]:
-        """Find boundaries for cropping based on mask"""
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            raise ValueError("No white regions found in mask")
-        
-        largest_contour = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(largest_contour)
-        
-        x = max(0, x - padding)
-        y = max(0, y - padding)
-        w = min(mask.shape[1] - x, w + 2 * padding)
-        h = min(mask.shape[0] - y, h + 2 * padding)
-        
-        print(f"Crop boundaries: x={x}, y={y}, width={w}, height={h}")
-        return x, y, w, h
+    # process row-chunks to save memory
+    chunk = 64
+    for y0 in range(0, H, chunk):
+        y1 = min(y0 + chunk, H)
+        ch = y1 - y0
 
-    def crop_image_with_mask(self, image: np.ndarray, mask: np.ndarray, 
-                           padding: int = 10) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
-        """Crop image based on mask boundaries"""
-        if image.shape[:2] != mask.shape[:2]:
-            print(f"Resizing mask from {mask.shape} to match image {image.shape[:2]}")
-            mask = cv2.resize(mask, (image.shape[1], image.shape[0]))
-        
-        x, y, w, h = self.find_crop_boundaries(mask, padding)
-        cropped_image = image[y:y+h, x:x+w]
-        
-        print(f"Original image size: {image.shape[1]}x{image.shape[0]}")
-        print(f"Cropped image size: {cropped_image.shape[1]}x{cropped_image.shape[0]}")
-        
-        return cropped_image, (x, y, w, h)
+        ref_patch  = torch.zeros((ch, W, patch_size, patch_size, 3),
+                                 device=device)
+        test_patch = torch.zeros_like(ref_patch)
 
-    def downscale_image(self, image: np.ndarray) -> np.ndarray:
-        """Downscale image while preserving normal map properties"""
-        h, w = image.shape[:2]
-        new_h, new_w = int(h * self.downscale_factor), int(w * self.downscale_factor)
-        
-        if new_h < self.template_size[1] or new_w < self.template_size[0]:
-            print("Downscaled image too small for template extraction. Skipping downscale.")
-            return image
-        
-        print(f"Downscaling from {w}x{h} to {new_w}x{new_h}")
-        downscaled = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        
-        return downscaled
+        for i, y in enumerate(range(y0, y1)):
+            for x in range(W):
+                rp = ref_pad[0, :, y:y+patch_size, x:x+patch_size].permute(1,2,0)
+                tp = test_pad[0,:, y:y+patch_size, x:x+patch_size].permute(1,2,0)
+                ref_patch[i, x]  = rp
+                test_patch[i, x] = tp
 
-    def extract_templates_with_vectors(self, image: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, Tuple[int, int]]]:
-        """
-        Extract templates and convert to normal vectors
-        
-        Returns:
-            List of (template_rgb, template_vectors, (x, y)) tuples
-        """
-        templates = []
-        h, w = image.shape[:2]
-        template_w, template_h = self.template_size
-        
-        if h < template_h or w < template_w:
-            print("Image too small for template extraction. Skipping.")
-            return []
-        
-        step_x = int(template_w * (1 - self.overlap_ratio))
-        step_y = int(template_h * (1 - self.overlap_ratio))
-        
-        print(f"Template extraction - Size: {template_w}x{template_h}, Step: {step_x}x{step_y}")
-        
-        for y in range(0, h - template_h + 1, step_y):
-            for x in range(0, w - template_w + 1, step_x):
-                template_rgb = image[y:y+template_h, x:x+template_w]
-                template_vectors = self.rgb_to_normal_vector(template_rgb)
-                templates.append((template_rgb, template_vectors, (x, y)))
-        
-        print(f"Extracted {len(templates)} templates with normal vectors")
-        return templates
+        ref_f  = ref_patch.reshape(-1, patch_size*patch_size, 3)
+        test_f = test_patch.reshape_as(ref_f)
+        dots   = (ref_f * test_f).sum(dim=2)           # (N,P)
+        mean_d = dots.mean(dim=1).view(ch, W)          # (ch,W)
+        simil[y0:y1] = mean_d
 
-    def compare_with_fake_vectors(self, templates: List[Tuple[np.ndarray, np.ndarray, Tuple[int, int]]], 
-                                 fake_image: np.ndarray, 
-                                 angular_threshold: float = 0.25) -> List[Tuple[int, int, float]]:
-        """
-        Compare templates with fake image using vector-based approach
-        
-        Args:
-            templates: List of (template_rgb, template_vectors, (x, y))
-            fake_image: Target image to compare against
-            angular_threshold: Threshold for angular difference (in radians)
-            
-        Returns:
-            List of (x, y, similarity_score) for suspect regions
-        """
-        fake_vectors = self.rgb_to_normal_vector(fake_image)
-        suspect_regions = []
-        
-        print(f"Comparing {len(templates)} templates using vector-based approach...")
-        
-        for i, (template_rgb, template_vectors, (x, y)) in enumerate(templates):
-            # Extract corresponding region from fake image
-            h, w = template_vectors.shape[:2]
-            
-            # Check bounds
-            if y + h > fake_vectors.shape[0] or x + w > fake_vectors.shape[1]:
-                continue
-            
-            fake_region_vectors = fake_vectors[y:y+h, x:x+w]
-            
-            # Compute similarity score
-            similarity = self.compute_similarity_score(template_vectors, fake_region_vectors)
-            
-            # Convert similarity to angular difference for thresholding
-            # Low similarity indicates high angular difference
-            if similarity < (1.0 - angular_threshold / (np.pi / 2)):
-                suspect_regions.append((x, y, similarity))
-        
-        print(f"Found {len(suspect_regions)} suspect regions with vector-based comparison")
-        return suspect_regions
+        del ref_patch, test_patch, ref_f, test_f, dots, mean_d
+        torch.cuda.empty_cache()
+        print(f"[INFO] Processed rows {y0+1}–{y1}/{H}")
 
-    def visualize_angular_differences(self, image1: np.ndarray, image2: np.ndarray, 
-                                    output_path: str = "angular_differences.jpg"):
-        """
-        Create a heatmap showing angular differences between two normal maps
-        """
-        vectors1 = self.rgb_to_normal_vector(image1)
-        vectors2 = self.rgb_to_normal_vector(image2)
-        
-        angular_diff = self.compute_angular_difference(vectors1, vectors2)
-        
-        # Convert to degrees for better interpretation
-        angular_diff_degrees = np.degrees(angular_diff)
-        
-        # Create heatmap
-        plt.figure(figsize=(12, 8))
-        plt.imshow(angular_diff_degrees, cmap='hot', interpolation='nearest')
-        plt.colorbar(label='Angular Difference (degrees)')
-        plt.title('Angular Differences Between Normal Maps')
-        plt.savefig(output_path)
-        plt.close()
-        
-        print(f"Angular difference heatmap saved as: {output_path}")
-        return angular_diff_degrees
+    return simil
 
-    def mark_suspect_areas_vector_based(self, image: np.ndarray, 
-                                      suspect_regions: List[Tuple[int, int, float]]) -> np.ndarray:
-        """Mark suspect areas with vector-based scores"""
-        marked = image.copy()
-        overlay = marked.copy()
-        
-        for (x, y, similarity) in suspect_regions:
-            x0, y0 = x, y
-            w, h = self.template_size
-            
-            # Color based on similarity score (red for low similarity)
-            color_intensity = int(255 * (1 - similarity))
-            cv2.rectangle(overlay, (x0, y0), (x0 + w, y0 + h), (0, 0, color_intensity), -1)
-            
-            # Add text with similarity score
-            cv2.putText(overlay, f"S:{similarity:.2f}", (x0, y0 - 2), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-        
-        cv2.addWeighted(overlay, 0.4, marked, 0.6, 0, marked)
-        return marked
 
-    def process_normal_maps(self, reference_path: str, test_path: str, mask_path: str,
-                          padding: int = 10, angular_threshold: float = 0.25,
-                          save_intermediate: bool = True) -> Tuple[np.ndarray, List]:
-        """
-        Process normal maps using vector-based comparison
-        
-        Args:
-            reference_path: Path to reference normal map
-            test_path: Path to test normal map
-            mask_path: Path to mask file
-            padding: Padding for cropping
-            angular_threshold: Angular threshold in radians (0.25 ≈ 14 degrees)
-            save_intermediate: Whether to save intermediate results
-        """
-        print("="*60)
-        print("VECTOR-BASED NORMAL MAP COMPARISON PIPELINE")
-        print("="*60)
-        
-        # Load images
-        print("1. Loading reference and test normal maps...")
-        reference_image = cv2.imread(reference_path)
-        test_image = cv2.imread(test_path)
-        
-        if reference_image is None or test_image is None:
-            raise FileNotFoundError("Could not load one or both images")
-        
-        mask = self.load_mask(mask_path)
-        
-        # Process reference image
-        print("\n2. Processing reference image...")
-        ref_cropped, crop_bounds = self.crop_image_with_mask(reference_image, mask, padding)
-        ref_downscaled = self.downscale_image(ref_cropped)
-        
-        # Process test image
-        print("\n3. Processing test image...")
-        test_cropped, _ = self.crop_image_with_mask(test_image, mask, padding)
-        test_downscaled = self.downscale_image(test_cropped)
-        
-        # Extract templates with vectors
-        print("\n4. Extracting templates and converting to normal vectors...")
-        templates = self.extract_templates_with_vectors(ref_downscaled)
-        
-        # Compare using vector-based approach
-        print("\n5. Performing vector-based comparison...")
-        suspect_regions = self.compare_with_fake_vectors(templates, test_downscaled, angular_threshold)
-        
-        # Create visualizations
-        if save_intermediate:
-            print("\n6. Saving results...")
-            
-            # Save processed images
-            cv2.imwrite("ref_processed.jpg", ref_downscaled)
-            cv2.imwrite("test_processed.jpg", test_downscaled)
-            
-            # Create angular difference heatmap
-            angular_diff = self.visualize_angular_differences(ref_downscaled, test_downscaled)
-            
-            # Mark suspect areas
-            marked = self.mark_suspect_areas_vector_based(test_downscaled, suspect_regions)
-            cv2.imwrite("marked_suspect_vector_based.jpg", marked)
-            
-            print("Saved: ref_processed.jpg, test_processed.jpg, marked_suspect_vector_based.jpg")
-            print("Saved: angular_differences.jpg (heatmap)")
-        
-        print(f"\nComparison complete. Found {len(suspect_regions)} suspect regions.")
-        print(f"Angular threshold used: {angular_threshold:.3f} radians ({np.degrees(angular_threshold):.1f} degrees)")
-        
-        return test_downscaled, suspect_regions
+# ---------------------------------------------------------------
+# 3.  CLAHE enhancement (CPU)
+# ---------------------------------------------------------------
 
-def main():
-    """Main function to run vector-based normal map comparison"""
-    processor = VectorBasedNormalMapProcessor(
-        template_size=(32, 32),  # Larger templates for better context
-        downscale_factor=0.2,
-        overlap_ratio=0.5        # Less overlap for better coverage
+def apply_clahe_enhancement_gpu(
+    sim_map: torch.Tensor, clip_limit: float = 2.0,
+    tile_grid_size: Tuple[int, int] = (8, 8)
+) -> torch.Tensor:
+    sim_cpu = sim_map.cpu().numpy()
+    sim_8u  = ((sim_cpu + 1.0) / 2.0 * 255).astype(np.uint8)
+
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    enh_8u = clahe.apply(sim_8u)
+
+    enh = enh_8u.astype(np.float32) / 255.0 * 2.0 - 1.0
+    return torch.from_numpy(enh).to(sim_map.device)
+
+
+# ---------------------------------------------------------------
+# 4.  Save utilities
+# ---------------------------------------------------------------
+
+def save_similarity_maps(sim: torch.Tensor, enh: torch.Tensor, stem: str) -> None:
+    sim_8u = ((sim.cpu().numpy() + 1.0) / 2.0 * 255).astype(np.uint8)
+    enh_8u = ((enh.cpu().numpy() + 1.0) / 2.0 * 255).astype(np.uint8)
+
+    sim_p = f"{os.path.splitext(stem)[0]}_similarity.png"
+    enh_p = f"{os.path.splitext(stem)[0]}_enhanced.png"
+
+    cv2.imwrite(sim_p, sim_8u)
+    cv2.imwrite(enh_p, enh_8u)
+    print(f"[INFO] Similarity map  → {sim_p}")
+    print(f"[INFO] Enhanced map    → {enh_p}")
+
+
+# ---------------------------------------------------------------
+# 5.  Main similarity pipeline
+# ---------------------------------------------------------------
+
+def run_gpu_similarity_analysis(
+    ref_path: str, test_path: str, output_base: str,
+    patch_size: int = 31, clip_limit: float = 3.0,
+    tile_grid_size: Tuple[int, int] = (8, 8)
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Using device: {device}")
+
+    ref_np = load_16bit_normal(ref_path)
+    test_np = load_16bit_normal(test_path)
+    if ref_np.shape != test_np.shape:
+        raise ValueError("Normal-map shapes differ.")
+
+    ref_t = torch.from_numpy(ref_np).permute(2,0,1).unsqueeze(0).to(device)
+    test_t= torch.from_numpy(test_np).permute(2,0,1).unsqueeze(0).to(device)
+
+    sim_t = sliding_cosine_similarity_gpu(ref_t, test_t, patch_size)
+    enh_t = apply_clahe_enhancement_gpu(sim_t, clip_limit, tile_grid_size)
+
+    save_similarity_maps(sim_t, enh_t, output_base)
+    return sim_t, enh_t
+
+
+# ---------------------------------------------------------------
+# 6.  SAM segmentation on the heat-map
+# ---------------------------------------------------------------
+
+def sam_from_similarity(
+    sim_png_path: str,
+    sam_ckpt: str = r"D:\Chandana\Photometric_Stereo\cam_photo_stereo\sam_vit_b.pth",
+    peak_frac: float = 0.001,
+    dilate_px: int = 4
+) -> np.ndarray:
+    """
+    Segment scratches directly on the enhanced similarity PNG.
+    Returns a uint8 mask (1 = scratch).
+    """
+    sim = cv2.imread(sim_png_path, cv2.IMREAD_GRAYSCALE)
+    if sim is None:
+        raise FileNotFoundError(sim_png_path)
+
+    # SAM expects 3-channel input → stack the heat-map
+    sim_rgb = cv2.merge([sim, sim, sim])
+
+    sam = sam_model_registry["vit_b"](checkpoint=sam_ckpt).to("cuda")
+    predictor = SamPredictor(sam)
+    predictor.set_image(sim_rgb)
+
+    # auto-prompt at brightest region
+    thresh = np.percentile(sim, 100 * (1 - peak_frac))
+    seeds  = np.column_stack(np.nonzero(sim >= thresh))
+    if seeds.size == 0:                              # fallback
+        y, x = np.unravel_index(sim.argmax(), sim.shape)
+    else:
+        y, x = seeds.mean(axis=0).astype(int)
+
+    masks, _, _ = predictor.predict(
+        point_coords=np.array([[x, y]]),
+        point_labels=np.array([1]),
+        multimask_output=False
     )
-    
-    # File paths
-    reference_path = "5cent_before.png"
-    test_path = "aligned_test_to_ref.png"
-    mask_path = "mask.png"
-    
-    # Check if files exist
-    if not all(os.path.exists(path) for path in [reference_path, test_path, mask_path]):
-        print("Error: One or more required files not found.")
-        print(f"Required files: {reference_path}, {test_path}, {mask_path}")
-        return
-    
-    try:
-        # Process normal maps
-        result_image, suspect_regions = processor.process_normal_maps(
-            reference_path=reference_path,
-            test_path=test_path,
-            mask_path=mask_path,
-            padding=20,
-            angular_threshold=0.25,  # About 14 degrees
-            save_intermediate=True
-        )
-        
-        # Print summary
-        print("\n" + "="*60)
-        print("SUMMARY")
-        print("="*60)
-        print(f"Total suspect regions found: {len(suspect_regions)}")
-        
-        if suspect_regions:
-            similarities = [score for _, _, score in suspect_regions]
-            print(f"Similarity scores range: {min(similarities):.3f} - {max(similarities):.3f}")
-            print(f"Mean similarity: {np.mean(similarities):.3f}")
-        
-        print("\nVector-based comparison completed successfully!")
-        
-    except Exception as e:
-        print(f"Error during processing: {str(e)}")
-        import traceback
-        traceback.print_exc()
+    mask = masks[0].astype(np.uint8)
 
+    # optional clean-up
+    if dilate_px:
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                      (dilate_px*2+1, dilate_px*2+1))
+        mask = cv2.dilate(mask, k, 1)
+
+    cv2.imwrite("scratch_mask.png", mask*255)
+    print("[INFO] scratch_mask.png written")
+    return mask
+
+
+# ---------------------------------------------------------------
+# 7.  Overlay + polygon export (visualisation)
+# ---------------------------------------------------------------
+
+def overlay_and_polygons(
+    sim_png: str, mask: np.ndarray,
+    overlay_png: str = "scratch_overlay.png",
+    polygons_json: str = "scratch_polygons.json",
+    color: tuple[int,int,int] = (0,255,0)
+):
+    base = cv2.imread(sim_png, cv2.IMREAD_GRAYSCALE)
+    base_rgb = cv2.cvtColor(base, cv2.COLOR_GRAY2BGR)
+    base_rgb[mask == 1] = color
+    cv2.imwrite(overlay_png, base_rgb)
+    print(f"[INFO] overlay saved  → {overlay_png}")
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+    polys = [c.squeeze(1).tolist() for c in contours if c.size >= 6]
+    with open(polygons_json, "w") as f:
+        json.dump({"polygons": polys, "h": mask.shape[0], "w": mask.shape[1]}, f, indent=2)
+    print(f"[INFO] polygons saved → {polygons_json}")
+
+def pop_contrast(
+    in_png: str,
+    out_png: str = "pop_similarity.png",
+    gamma: float = 0.35,
+    keep_top: float = 0.002,
+    morph_kernel: int = 5,
+    morph_iter: int = 2
+) -> np.ndarray:
+    """
+    Ultra-boost the contrast of an 8-bit similarity map so scratches
+    become bright and the background fades.
+
+    Parameters
+    ----------
+    in_png      : path to the 8-bit similarity PNG (raw or CLAHE-enhanced).
+    out_png     : file to write the pop-contrast image.
+    gamma       : <1 brightens highlights, darkens mid-tones (0.25–0.5 typical).
+    keep_top    : fraction of hottest pixels kept after thresholding (0–1).
+    morph_kernel: diameter (px) of the elliptical kernel for morphological close.
+    morph_iter  : iterations of morphology to run.
+
+    Returns
+    -------
+    binary_mask : np.ndarray uint8, shape(H,W), 1 where scratch pixels remain.
+    """
+    # 1 ── load the single-channel similarity map
+    sim = cv2.imread(in_png, cv2.IMREAD_GRAYSCALE)
+    if sim is None:
+        raise FileNotFoundError(in_png)
+
+    # 2 ── percentile clip (1–99 %) to discard outliers, then stretch to 0-255
+    lo, hi = np.percentile(sim, [1, 99])
+    sim_clipped = np.clip(sim, lo, hi)
+    stretched = ((sim_clipped - lo) * (255.0 / (hi - lo))).astype(np.uint8)
+
+    # 3 ── gamma correction <1 → boosts highlights
+    lut = np.array([((i / 255.0) ** gamma) * 255 for i in range(256)],
+                   dtype="uint8")
+    popped = cv2.LUT(stretched, lut)
+
+    # 4 ── keep only the top X % brightest pixels
+    thresh_val = np.percentile(popped, 100 * (1 - keep_top))
+    binary = (popped >= thresh_val).astype(np.uint8)
+
+    # 5 ── morphology: close gaps, thicken hair-line scratches
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (morph_kernel, morph_kernel))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE,
+                              kernel, iterations=morph_iter)
+
+    # 6 ── write the high-contrast map for visual confirmation
+    cv2.imwrite(out_png, popped)
+    print(f"[INFO] pop-contrast map  → {out_png}")
+    return binary
+
+
+# ---------------------------------------------------------------
+# 8.  Example usage
+# ---------------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    ref_path  = r"C:/Users/Photogauge/projet/cam_photo_stereo/photostereo_py/script/normal_map_50paise_bef.png"
+    test_path = r"C:/Users/Photogauge/projet/cam_photo_stereo/photostereo_py/script/after.png"
+    output_base = "similarity_analysis.png"
+
+    # #--- step-1: similarity analysis (uncomment to recompute) -----------
+    # run_gpu_similarity_analysis(
+    #     ref_path, test_path, output_base,
+    #     patch_size=31, clip_limit=3.0, tile_grid_size=(8,8)
+    # )
+
+    # --- step-2: SAM segmentation on the enhanced map -------------------
+    sim_png = "similarity_analysis_similarity.png"     # <- produced in step-1
+    binary_mask = pop_contrast("similarity_analysis_enhanced.png")
+    mask = sam_from_similarity("pop_similarity.png")
+
+    # --- step-3: visual overlay & polygons ------------------------------
+    overlay_and_polygons(sim_png, mask)
