@@ -56,6 +56,8 @@ mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
     pcd, o3d.utility.DoubleVector(radii)
 )
 
+
+
 # --- Clean mesh ---
 print("Cleaning mesh...")
 mesh.remove_duplicated_vertices()
