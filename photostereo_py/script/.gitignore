@@ -13,3 +13,11 @@
 /photostereo_py/.vscode/
 !/samples/queen/*
 /script/*.exr
+
+# Ignore these folders and their contents
+input/
+aligned_output/
+diff_output/
+analysis_plots/
+misc/
+normal_map_generation/
