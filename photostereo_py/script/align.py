@@ -68,16 +68,22 @@ def align_homography(test, ref_path):
 
 
 if __name__ == "__main__":
-    ref_path = "input_for_align/1rupee/1before1.png"
-    test_path = "input_for_align/1rupee/1after1.png"
+    ref_path = r"D:\Chandana\Photometric_Stereo\cam_photo_stereo\photostereo_py\script\input\24_7_25\10rupee_before_1\10rupee_16bit_before1.png"
+    test_path = r"D:\Chandana\Photometric_Stereo\cam_photo_stereo\photostereo_py\script\input\24_7_25\10rupee_after_1\normal_map_16bit_10rupee_after1 .png"
     
     aligned_image = align_affine(test_path,ref_path)
     aligned_final = align_homography(aligned_image,ref_path)
     os.makedirs("aligned_output", exist_ok = True)
     output_path = "aligned_output/aligned_coin2_16bit_aff+hmg.png"
     
+    coin_name = Path(ref_path).parts[8]
+    output_dir = Path("aligned_output") / coin_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path_affine = output_dir / f"aligned_{coin_name}_16bit_aff.png" 
+    
    # Save the aligned image
-    cv.imwrite("aligned_output/aligned_coin2_16bit_aff+hmg.png", aligned_final)
+    cv.imwrite(output_path_affine, aligned_image)
+    # cv.imwrite("aligned_output/aligned_coin2_16bit_aff+hmg.png", aligned_final)
     logger.info(f"Saved aligned image")
     
     

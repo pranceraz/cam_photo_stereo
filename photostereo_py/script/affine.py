@@ -22,11 +22,8 @@ class FeatureExtraction:
         if img.ndim not in [2, 3]:
             raise ValueError(f"Unsupported image shape: {img.shape}")
 
-       # if img.dtype != np.uint8:
+       
         self.img_8bit = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
-       # else:
-      #      img_8bit = img.copy()
-                # Convert to grayscale properly
         logger.info(f"[FeatureExtraction] Received image with shape: {img.shape}")
 
         if len(self.img_8bit.shape) == 2:
@@ -35,15 +32,15 @@ class FeatureExtraction:
         elif len(img.shape) == 3:
             # Convert to grayscale
             if self.img_8bit.shape[2] == 3:  # BGR
-                self.gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+                self.gray_img = cv.cvtColor(self.img_8bit, cv.COLOR_BGR2GRAY)
             elif self.img_8bit.shape[2] == 4:  # BGRA
-                self.gray_img = cv.cvtColor(img, cv.COLOR_BGRA2GRAY)
+                self.gray_img = cv.cvtColor(self.img_8bit, cv.COLOR_BGRA2GRAY)
             else:
                 raise ValueError(f"Unexpected number of channels: {img.shape[2]}")
         else:
             raise ValueError(f"Unexpected image dimensions: {img.shape}")
         
-        #redu
+        
         #redundant
         if self.gray_img.dtype != np.uint8:
              logger.info(f"Converting input image from {self.gray_img.dtype} to uint8")
@@ -55,9 +52,9 @@ class FeatureExtraction:
         
         self.kps, self.des = orb.detectAndCompute( \
             self.gray_img, None)
-        self.img_kps = cv.drawKeypoints( \
-            self.img_8bit, self.kps, 0, \
-            flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        # self.img_kps = cv.drawKeypoints( \
+        #     self.img_8bit, self.kps, 0, \
+        #     flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         self.matched_pts = []
 
 class FeatureMatching():
@@ -103,7 +100,6 @@ class FeatureMatching():
         return matches 
     
 class ImageAligner():
-    '''pass any image in the form of a numpy array to reallign it'''
     def __init__(self, ref_img:np.array, test_img:np.array):
         # Load images with all channels preserved
         self.ref = ref_img
@@ -111,8 +107,8 @@ class ImageAligner():
         self.ref_orig = self.ref.copy()
         self.test_orig = self.test.copy()
         
-        self.ref_8bit = cv.normalize(self.ref, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
-        self.test_8bit = cv.normalize(self.test, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+        # self.ref_8bit = cv.normalize(self.ref, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+        # self.test_8bit = cv.normalize(self.test, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
         # self.ref_8bit = image_utils.to_8bit(self.ref)
         # self.test_8bit = image_utils.to_8bit(self.test)
 
@@ -161,11 +157,6 @@ class ImageAligner():
 
         
         output = warped
-        
-        # NEW: Log final output statistics
-        logger.info(f"[Final Output] Shape: {output.shape}, dtype: {output.dtype}")
-        logger.info(f"[Final Output] Value range: [{output.min():.3f}, {output.max():.3f}]")
-        logger.info(f"[Final Output] Non-zero pixels: {np.count_nonzero(output)}/{output.size} ({np.count_nonzero(output)/output.size:.2%})")
 
         return output
         
